@@ -32,6 +32,8 @@ server(Spring Boot)
 
 真实调用大模型前，必须由用户提供新的 `LLM_API_KEY`。旧项目中的 API Key 已删除并失效，不读取、不恢复、不迁移。用户提供的新 Key 只能写入本地 `.env`，不得写入源码、配置模板、README、日志、测试文件或最终交付内容。
 
+`.env.example` 默认使用 Mock ChatModel，不需要 API Key 也能完成编译、启动和基础演示。需要真实调用时，在本地 `.env` 中设置 `LLM_MOCK_ENABLED=false` 并填写自己的 `LLM_API_KEY`。
+
 当前默认 Chat 模型名为 `deepseek-v4-flash`，通过 OpenAI-compatible 接口调用。
 
 ## 模型准备
