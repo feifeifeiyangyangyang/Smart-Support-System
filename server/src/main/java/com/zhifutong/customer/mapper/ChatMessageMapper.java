@@ -1,0 +1,9 @@
+package com.zhifutong.customer.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.zhifutong.customer.entity.ChatMessage;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
+}

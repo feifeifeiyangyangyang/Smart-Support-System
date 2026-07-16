@@ -1,0 +1,58 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: smart-customer-service
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:smart_customer_service}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:change_me}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+app:
+  document:
+    storage-path: ${DOCUMENT_STORAGE_PATH:./data/documents}
+    max-size-mb: ${DOCUMENT_MAX_SIZE_MB:50}
+    allowed-extensions: pdf,docx,txt,md
+  rag:
+    chunk-size: ${RAG_CHUNK_SIZE:500}
+    chunk-overlap: ${RAG_CHUNK_OVERLAP:50}
+    min-chunk-length: ${RAG_MIN_CHUNK_LENGTH:30}
+    top-k: ${RAG_TOP_K:5}
+    min-retrieval-score: ${RAG_MIN_RETRIEVAL_SCORE:0.35}
+    high-confidence-score: ${RAG_HIGH_CONFIDENCE_SCORE:0.80}
+    medium-confidence-score: ${RAG_MEDIUM_CONFIDENCE_SCORE:0.65}
+  embedding:
+    model-path: ${EMBEDDING_MODEL_PATH:./models/embedding/model.onnx}
+    tokenizer-path: ${EMBEDDING_TOKENIZER_PATH:./models/embedding/tokenizer.json}
+    dimension: ${EMBEDDING_DIMENSION:384}
+    max-token-length: ${EMBEDDING_MAX_TOKEN_LENGTH:256}
+    mock-enabled: ${EMBEDDING_MOCK_ENABLED:false}
+  qdrant:
+    host: ${QDRANT_HOST:localhost}
+    port: ${QDRANT_PORT:6333}
+    collection: ${QDRANT_COLLECTION:smart_customer_service_chunks}
+  llm:
+    api-key: ${LLM_API_KEY:}
+    base-url: ${LLM_BASE_URL:https://api.deepseek.com}
+    model-name: ${LLM_MODEL_NAME:deepseek-v4-flash}
+    mock-enabled: ${LLM_MOCK_ENABLED:false}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
