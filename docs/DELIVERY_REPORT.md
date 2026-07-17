@@ -30,6 +30,8 @@ docker compose -f deploy\docker-compose.yml config
 
 - 已实现真实后端登录、Spring Security 鉴权、JWT Access Token、Redis Refresh Token、退出黑名单。
 - 已实现用户端和管理端角色隔离，前端登录不再是演示状态。
+- 已实现商品、订单、物流轨迹数据模型，用户端可查看订单，管理端可维护订单状态和物流节点。
+- 已实现聊天业务优先回答：订单、发货、物流、商品问题优先查询业务表，再兜底 RAG。
 - 已实现知识库文档上传、SHA-256 去重、异步任务、文本切片持久化和 Qdrant 写入。
 - 已实现 RAG 检索、低相关拒答、回答来源快照保存。
 - 已实现聊天 Redis 限流，超限请求不会继续调用 Embedding、Qdrant 或大模型。

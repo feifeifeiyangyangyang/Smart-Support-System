@@ -31,6 +31,81 @@
           </el-table>
         </div>
       </el-tab-pane>
+
+      <el-tab-pane label="商品信息">
+        <div class="panel">
+          <div class="toolbar">
+            <el-input v-model="productKeyword" class="toolbar-input" placeholder="商品名或编码" clearable @keyup.enter="loadProducts" />
+            <el-button :icon="Search" @click="loadProducts">搜索</el-button>
+          </div>
+          <el-table :data="products" border stripe v-loading="productLoading">
+            <el-table-column prop="productCode" label="编码" width="110" />
+            <el-table-column prop="productName" label="商品" min-width="170" />
+            <el-table-column prop="category" label="分类" width="110" />
+            <el-table-column prop="price" label="价格" width="100" />
+            <el-table-column prop="stockQuantity" label="库存" width="90" />
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag :type="row.saleStatus === 'ON_SALE' ? 'success' : 'info'">{{ productStatusLabel(row.saleStatus) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="dispatchRule" label="发货规则" min-width="240" />
+            <el-table-column prop="afterSaleRule" label="售后规则" min-width="260" />
+          </el-table>
+        </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="订单物流">
+        <div class="panel">
+          <div class="toolbar">
+            <el-select v-model="orderStatus" clearable placeholder="订单状态" class="toolbar-select" @change="loadOrders">
+              <el-option label="待发货" value="WAITING_SHIPMENT" />
+              <el-option label="已发货" value="SHIPPED" />
+              <el-option label="运输中" value="IN_TRANSIT" />
+              <el-option label="已签收" value="SIGNED" />
+              <el-option label="退款中" value="REFUNDING" />
+            </el-select>
+            <el-input v-model="orderKeyword" class="toolbar-input" placeholder="订单号" clearable @keyup.enter="loadOrders" />
+            <el-button :icon="Refresh" @click="loadOrders">刷新</el-button>
+          </div>
+          <el-table :data="orders" border stripe v-loading="orderLoading">
+            <el-table-column prop="orderNo" label="订单号" min-width="170" />
+            <el-table-column label="商品" min-width="170">
+              <template #default="{ row }">{{ row.product.productName }} × {{ row.quantity }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag :type="orderStatusType(row.status)">{{ orderStatusLabel(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="预计发货" width="160">
+              <template #default="{ row }">{{ formatDate(row.expectedShipAt) }}</template>
+            </el-table-column>
+            <el-table-column label="最新物流" min-width="240">
+              <template #default="{ row }">
+                <span v-if="row.shipmentEvents.length">{{ row.shipmentEvents[0].eventNote }}</span>
+                <span v-else class="muted">暂无物流</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="更新物流" width="520">
+              <template #default="{ row }">
+                <div class="order-action">
+                  <el-select v-model="row.nextStatus" placeholder="新状态">
+                    <el-option label="已发货" value="SHIPPED" />
+                    <el-option label="运输中" value="IN_TRANSIT" />
+                    <el-option label="已签收" value="SIGNED" />
+                    <el-option label="退款中" value="REFUNDING" />
+                  </el-select>
+                  <el-input v-model="row.trackingNo" placeholder="物流单号" />
+                  <el-input v-model="row.eventNote" placeholder="物流说明" />
+                  <el-button text type="primary" @click="updateOrder(row)">保存</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-tab-pane>
+
       <el-tab-pane label="工单处理">
         <div class="panel">
           <div class="toolbar">
@@ -97,15 +172,53 @@ interface TicketRow {
   resolution?: string
 }
 
+interface ProductRow {
+  id: number
+  productCode: string
+  productName: string
+  category: string
+  saleStatus: string
+  price: string
+  stockQuantity: number
+  dispatchRule: string
+  afterSaleRule: string
+}
+
+interface ShipmentEvent {
+  eventNote: string
+  eventTime: string
+  trackingNo?: string
+}
+
+interface OrderRow {
+  id: number
+  orderNo: string
+  product: ProductRow
+  quantity: number
+  status: string
+  expectedShipAt?: string
+  shipmentEvents: ShipmentEvent[]
+  nextStatus?: string
+  trackingNo?: string
+  eventNote?: string
+}
+
 const keyword = ref('')
+const productKeyword = ref('')
+const orderKeyword = ref('')
 const documents = ref<DocumentRow[]>([])
 const tickets = ref<TicketRow[]>([])
+const products = ref<ProductRow[]>([])
+const orders = ref<OrderRow[]>([])
 const ticketStatus = ref('')
+const orderStatus = ref('')
 const documentLoading = ref(false)
 const ticketLoading = ref(false)
+const productLoading = ref(false)
+const orderLoading = ref(false)
 
 onMounted(async () => {
-  await Promise.all([loadDocuments(), loadTickets()])
+  await Promise.all([loadDocuments(), loadTickets(), loadProducts(), loadOrders()])
 })
 
 async function loadDocuments() {
@@ -123,7 +236,7 @@ async function uploadDocument(options: UploadRequestOptions) {
   form.append('file', options.file)
   try {
     await unwrap(api.post('/admin/documents', form, { headers: { 'Content-Type': 'multipart/form-data' } }))
-    ElMessage.success('上传完成')
+    ElMessage.success('上传完成，后台正在处理')
     await loadDocuments()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '上传失败')
@@ -142,6 +255,42 @@ async function retry(id: number) {
 async function remove(id: number) {
   await unwrap(api.delete(`/admin/documents/${id}`))
   await loadDocuments()
+}
+
+async function loadProducts() {
+  productLoading.value = true
+  try {
+    const data = await unwrap<{ records: ProductRow[] }>(api.get('/admin/products', { params: { keyword: productKeyword.value } }))
+    products.value = data.records
+  } finally {
+    productLoading.value = false
+  }
+}
+
+async function loadOrders() {
+  const params: Record<string, string> = {}
+  if (orderStatus.value) params.status = orderStatus.value
+  if (orderKeyword.value) params.keyword = orderKeyword.value
+  orderLoading.value = true
+  try {
+    const data = await unwrap<{ records: OrderRow[] }>(api.get('/admin/orders', { params }))
+    orders.value = data.records
+  } finally {
+    orderLoading.value = false
+  }
+}
+
+async function updateOrder(row: OrderRow) {
+  if (!row.nextStatus) return
+  await unwrap(api.patch(`/admin/orders/${row.id}/status`, {
+    status: row.nextStatus,
+    carrier: row.nextStatus === 'SHIPPED' || row.nextStatus === 'IN_TRANSIT' || row.nextStatus === 'SIGNED' ? '演示快递' : undefined,
+    trackingNo: row.trackingNo,
+    location: '演示网点',
+    eventNote: row.eventNote
+  }))
+  ElMessage.success('订单状态已更新')
+  await loadOrders()
 }
 
 async function loadTickets() {
@@ -188,6 +337,39 @@ function statusType(status: string) {
   if (status === 'CLOSED') return 'info'
   return 'primary'
 }
+
+function productStatusLabel(status: string) {
+  return {
+    ON_SALE: '在售',
+    OUT_OF_STOCK: '缺货',
+    OFF_SHELF: '下架'
+  }[status] ?? status
+}
+
+function orderStatusLabel(status: string) {
+  return {
+    PENDING_PAYMENT: '待付款',
+    PAID: '已付款',
+    WAITING_SHIPMENT: '待发货',
+    SHIPPED: '已发货',
+    IN_TRANSIT: '运输中',
+    SIGNED: '已签收',
+    REFUNDING: '退款中',
+    REFUNDED: '已退款',
+    CANCELLED: '已取消'
+  }[status] ?? status
+}
+
+function orderStatusType(status: string) {
+  if (status === 'SIGNED') return 'success'
+  if (status === 'IN_TRANSIT' || status === 'SHIPPED') return 'warning'
+  if (status === 'CANCELLED' || status === 'REFUNDED') return 'info'
+  return 'primary'
+}
+
+function formatDate(value?: string) {
+  return value ? value.replace('T', ' ').slice(0, 16) : '暂未同步'
+}
 </script>
 
 <style scoped>
@@ -198,7 +380,19 @@ function statusType(status: string) {
   align-items: center;
 }
 
-@media (max-width: 760px) {
+.order-action {
+  display: grid;
+  grid-template-columns: 110px 120px minmax(120px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.muted {
+  color: #8b7d72;
+}
+
+@media (max-width: 900px) {
+  .order-action,
   .ticket-action {
     grid-template-columns: 1fr;
   }

@@ -4,17 +4,18 @@
 
 ## 项目背景
 
-面向电商售后场景，用户可以咨询发货、退款、退换货、商品售后和账号问题。系统优先从企业知识库检索资料，相关度足够时调用大模型生成客服回复；相关度不足时不调用大模型，并引导用户创建人工工单。
+面向电商售后场景，用户可以咨询发货、物流、退款、退换货、商品售后和账号问题。系统对订单、物流、商品问题优先查询业务数据；未命中业务数据时，再从企业知识库检索资料，相关度足够时调用大模型生成客服回复；相关度不足时不调用大模型，并引导用户创建人工工单。
 
 ## 核心业务闭环
 
 1. 管理员上传知识库文档。
 2. 系统保存文档、创建处理任务，并异步解析、切片、生成向量、写入 Qdrant。
 3. 用户登录后发起咨询。
-4. 系统执行关键词检索 + 向量检索，构建 RAG Prompt。
-5. 生成回答并保存引用来源快照。
-6. 无法可靠回答时，用户创建工单。
-7. 管理员处理工单，系统记录状态流转和操作日志。
+4. 如果问题涉及订单、发货、物流或商品，系统优先查询业务订单和物流表并直接回答。
+5. 未命中业务数据时，系统执行关键词检索 + 向量检索，构建 RAG Prompt。
+6. 生成回答并保存引用来源快照。
+7. 无法可靠回答时，用户创建工单。
+8. 管理员处理工单，系统记录状态流转和操作日志。
 
 ## 技术栈
 
@@ -76,7 +77,10 @@ stateDiagram-v2
 ```mermaid
 flowchart TD
   Q[用户问题] --> RL[Redis 限流]
-  RL --> E[Embedding]
+  RL --> Biz{订单/商品/物流问题?}
+  Biz -- 是 --> OrderDB[(订单与物流表)]
+  OrderDB --> BizAnswer[业务确定性回答]
+  Biz -- 否 --> E[Embedding]
   E --> VS[Qdrant 向量检索]
   Q --> KS[MySQL kb_chunk 关键词检索]
   VS --> Merge[合并去重排序]
@@ -107,6 +111,9 @@ stateDiagram-v2
 - `kb_document`：文档元数据、SHA-256、上传人、处理状态。
 - `document_processing_task`：文档异步处理任务。
 - `kb_chunk`：持久化知识片段。
+- `product_catalog`：商品资料、库存、发货规则、售后规则。
+- `customer_order`：用户订单、状态、预计发货时间、收货信息。
+- `shipment_event`：订单物流轨迹。
 - `chat_conversation`：用户会话。
 - `chat_message`：聊天消息。
 - `chat_message_source`：回答引用来源快照。
@@ -167,6 +174,6 @@ docker compose -f deploy/docker-compose.yml config
 
 ## 当前功能边界
 
-已实现：JWT + Redis 认证、Refresh Token Cookie、退出黑名单、文档异步任务、kb_chunk 持久化、RAG 来源快照、聊天限流、工单状态机、乐观锁、操作日志、用户端和管理端页面。
+已实现：JWT + Redis 认证、Refresh Token Cookie、退出黑名单、商品/订单/物流业务查询、文档异步任务、kb_chunk 持久化、RAG 来源快照、聊天限流、工单状态机、乐观锁、操作日志、用户端和管理端页面。
 
 已补充 Docker healthcheck、Actuator health/readiness、Maven Wrapper。未完成：完整 Testcontainers 覆盖、WireMock 外部服务测试、生产级密钥管理。

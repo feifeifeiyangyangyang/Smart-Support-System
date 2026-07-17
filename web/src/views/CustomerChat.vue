@@ -3,16 +3,14 @@
     <div class="page-head">
       <div>
         <h1 class="page-title">客服咨询</h1>
-        <p>可咨询发货、退款、退换货、商品售后和账号问题。</p>
+        <p>可咨询发货、物流、退款、退换货、商品售后和账号问题。涉及订单时，系统会优先查询订单数据。</p>
       </div>
       <el-button type="warning" plain :icon="Service" @click="ticketVisible = true">转人工</el-button>
     </div>
 
     <div class="chat-layout">
       <div class="panel conversation">
-        <div class="welcome">
-          您好，请直接描述问题。涉及具体订单时，可以一起提供商品名或订单号。
-        </div>
+        <div class="welcome">您好，请直接描述问题。可以带上订单号或商品名，我会先帮您查订单和物流。</div>
         <div class="quick">
           <el-button v-for="item in quickQuestions" :key="item" size="small" round @click="ask(item)">
             {{ item }}
@@ -22,7 +20,8 @@
         <div ref="messageListRef" class="messages" aria-live="polite">
           <div v-if="!messages.length" class="empty-chat">
             <strong>可以这样问：</strong>
-            <span>“暖风杯 H100 什么时候发货？”</span>
+            <span>“我的订单什么时候发货？”</span>
+            <span>“ORD202607160002 物流到哪了？”</span>
             <span>“轻氧洗面巾 C20 拆封后能退吗？”</span>
           </div>
           <div v-for="message in messages" :key="message.id" class="message" :class="message.role.toLowerCase()">
@@ -35,7 +34,7 @@
           <el-input
             v-model="question"
             aria-label="输入客服问题"
-            placeholder="例如：暖风杯 H100 什么时候发货？"
+            placeholder="例如：我的订单什么时候发货？"
             :disabled="sending"
             @keyup.enter="ask(question)"
           />
@@ -47,14 +46,26 @@
       </div>
 
       <aside class="panel side">
-        <div class="side-title">参考资料</div>
-        <div v-if="!lastSources.length" class="empty-source">客服回答后会显示引用到的业务资料。</div>
+        <div class="side-title">我的订单</div>
+        <div v-if="!orders.length" class="empty-source">暂无订单。</div>
+        <div v-for="order in orders" :key="order.id" class="order-item">
+          <div class="ticket-row">
+            <strong>{{ order.orderNo }}</strong>
+            <el-tag size="small" :type="orderStatusType(order.status)">{{ orderStatusLabel(order.status) }}</el-tag>
+          </div>
+          <p>{{ order.product.productName }} × {{ order.quantity }}</p>
+          <small>预计发货：{{ formatDate(order.expectedShipAt) }}</small>
+          <small v-if="order.shipmentEvents.length">最新物流：{{ order.shipmentEvents[0].eventNote }}</small>
+        </div>
+
+        <div class="side-title source-title">引用资料</div>
+        <div v-if="!lastSources.length" class="empty-source">客服回答引用知识库时会显示来源。</div>
         <div v-for="source in lastSources" :key="source.documentId + source.fileName" class="source-item">
           <div class="source-name">{{ source.fileName }}</div>
           <p>{{ source.snippet }}</p>
         </div>
-        <div class="metric">当前置信等级：{{ confidenceLabel }}</div>
-        <div class="metric">是否建议人工：{{ needHuman ? '是' : '否' }}</div>
+        <div class="metric">置信等级：{{ confidenceLabel }}</div>
+        <div class="metric">建议人工：{{ needHuman ? '是' : '否' }}</div>
 
         <div class="side-title ticket-title">我的工单</div>
         <div v-if="!tickets.length" class="empty-source">暂无工单。需要人工处理时可以点击“转人工”。</div>
@@ -125,18 +136,40 @@ interface TicketRow {
   handlingNote?: string
 }
 
+interface ProductRow {
+  id: number
+  productCode: string
+  productName: string
+}
+
+interface ShipmentEvent {
+  eventNote: string
+  eventTime: string
+  trackingNo?: string
+}
+
+interface OrderRow {
+  id: number
+  orderNo: string
+  product: ProductRow
+  quantity: number
+  status: string
+  expectedShipAt?: string
+  shipmentEvents: ShipmentEvent[]
+}
+
 const quickQuestions = [
-  '商品什么时候发货？',
-  '暖风杯 H100 什么时候发货？',
+  '我的订单什么时候发货？',
+  'ORD202607160002 物流到哪了？',
+  '暖风杯 H100 还有库存吗？',
   '轻氧洗面巾 C20 拆封后能退吗？',
-  '云感靠枕 P9 有污渍还能退吗？',
-  '退款一般如何处理？',
   '收到破损商品怎么办？'
 ]
 const question = ref('')
 const conversationId = ref<number | null>(null)
 const messages = ref<MessageRow[]>([])
 const tickets = ref<TicketRow[]>([])
+const orders = ref<OrderRow[]>([])
 const lastSources = ref<SourceReference[]>([])
 const confidenceLevel = ref('')
 const needHuman = ref(false)
@@ -156,7 +189,7 @@ const confidenceLabel = computed(() => {
 onMounted(async () => {
   const conversation = await unwrap<{ id: number }>(api.post('/conversations', { title: '用户客服会话' }))
   conversationId.value = conversation.id
-  await loadTickets()
+  await Promise.all([loadTickets(), loadOrders()])
 })
 
 async function reloadMessages() {
@@ -184,6 +217,7 @@ async function ask(text: string) {
     question.value = ''
     ticket.description = content
     await reloadMessages()
+    await loadOrders()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '发送失败')
   } finally {
@@ -222,11 +256,15 @@ async function loadTickets() {
   tickets.value = data.records
 }
 
+async function loadOrders() {
+  const data = await unwrap<{ records: OrderRow[] }>(api.get('/orders'))
+  orders.value = data.records
+}
+
 function statusLabel(status: string) {
   return {
     OPEN: '待处理',
     PROCESSING: '处理中',
-    PENDING: '待处理',
     RESOLVED: '已解决',
     CLOSED: '已关闭'
   }[status] ?? status
@@ -237,6 +275,31 @@ function statusType(status: string) {
   if (status === 'PROCESSING') return 'warning'
   if (status === 'CLOSED') return 'info'
   return 'primary'
+}
+
+function orderStatusLabel(status: string) {
+  return {
+    PENDING_PAYMENT: '待付款',
+    PAID: '已付款',
+    WAITING_SHIPMENT: '待发货',
+    SHIPPED: '已发货',
+    IN_TRANSIT: '运输中',
+    SIGNED: '已签收',
+    REFUNDING: '退款中',
+    REFUNDED: '已退款',
+    CANCELLED: '已取消'
+  }[status] ?? status
+}
+
+function orderStatusType(status: string) {
+  if (status === 'SIGNED') return 'success'
+  if (status === 'IN_TRANSIT' || status === 'SHIPPED') return 'warning'
+  if (status === 'CANCELLED' || status === 'REFUNDED') return 'info'
+  return 'primary'
+}
+
+function formatDate(value?: string) {
+  return value ? value.replace('T', ' ').slice(0, 16) : '暂未同步'
 }
 </script>
 
@@ -256,7 +319,7 @@ function statusType(status: string) {
 
 .chat-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 18px;
 }
 
@@ -278,6 +341,12 @@ function statusType(status: string) {
   border-radius: 8px;
   padding: 14px;
   background: #fffaf5;
+}
+
+.empty-chat {
+  display: grid;
+  gap: 8px;
+  color: #75685f;
 }
 
 .message {
@@ -327,6 +396,7 @@ function statusType(status: string) {
   font-weight: 600;
 }
 
+.source-title,
 .ticket-title {
   margin-top: 18px;
 }
@@ -338,7 +408,8 @@ function statusType(status: string) {
 }
 
 .source-item,
-.ticket-item {
+.ticket-item,
+.order-item {
   padding: 12px 0;
   border-bottom: 1px solid #f0e5dc;
 }
@@ -349,7 +420,8 @@ function statusType(status: string) {
 }
 
 .source-item p,
-.ticket-item p {
+.ticket-item p,
+.order-item p {
   margin: 0;
   color: #6b5f58;
   line-height: 1.6;
@@ -363,7 +435,8 @@ function statusType(status: string) {
   margin-bottom: 6px;
 }
 
-.ticket-item small {
+.ticket-item small,
+.order-item small {
   display: block;
   color: #8b7d72;
   margin-top: 6px;

@@ -34,6 +34,7 @@ import com.zhifutong.customer.vo.ChatResponse;
 import com.zhifutong.customer.vo.ConversationResponse;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ class ChatApplicationServiceTest {
     private ChatModelClient chatModelClient;
     private ChatMessageSourceMapper messageSourceMapper;
     private KbChunkMapper chunkMapper;
+    private CommerceApplicationService commerceService;
     private ChatApplicationService service;
 
     @BeforeEach
@@ -57,6 +59,7 @@ class ChatApplicationServiceTest {
         chatModelClient = mock(ChatModelClient.class);
         messageSourceMapper = mock(ChatMessageSourceMapper.class);
         chunkMapper = mock(KbChunkMapper.class);
+        commerceService = mock(CommerceApplicationService.class);
         var properties = TestPropertiesFactory.create();
         service = new ChatApplicationService(
                 conversationService,
@@ -69,7 +72,8 @@ class ChatApplicationServiceTest {
                 properties,
                 new ObjectMapper(),
                 messageSourceMapper,
-                chunkMapper
+                chunkMapper,
+                commerceService
         );
         AuthContext.set(new AuthenticatedUser(1L, "user", "演示用户", UserRole.CUSTOMER, "test-token-id"));
         when(conversationService.create(anyString(), anyLong())).thenReturn(new ConversationResponse(1L, "C001", "匿名客服会话",
@@ -77,6 +81,7 @@ class ChatApplicationServiceTest {
         doNothing().when(conversationService).saveAssistantMessage(any());
         when(embeddingClient.embed(any())).thenReturn(new float[] {0.1f, 0.2f});
         when(keywordKnowledgeSearch.search(any(), anyInt())).thenReturn(List.of());
+        when(commerceService.answerBusinessQuestion(any(), anyString())).thenReturn(Optional.empty());
     }
 
     @AfterEach
@@ -120,6 +125,18 @@ class ChatApplicationServiceTest {
         ChatResponse response = service.chat(null, "能查真实订单吗");
 
         assertTrue(response.needHuman());
+        verify(chatModelClient, never()).answer(any(), any());
+    }
+
+    @Test
+    void businessAnswerBypassesRagAndChatModel() {
+        when(commerceService.answerBusinessQuestion(any(), anyString())).thenReturn(Optional.of("订单预计今天 18:00 前发货。"));
+
+        ChatResponse response = service.chat(null, "我的订单什么时候发货");
+
+        assertEquals(ConfidenceLevel.HIGH, response.confidenceLevel());
+        assertEquals("订单预计今天 18:00 前发货。", response.answer());
+        verify(embeddingClient, never()).embed(any());
         verify(chatModelClient, never()).answer(any(), any());
     }
 

@@ -43,13 +43,15 @@ public class ChatApplicationService {
     private final ObjectMapper objectMapper;
     private final ChatMessageSourceMapper messageSourceMapper;
     private final KbChunkMapper chunkMapper;
+    private final CommerceApplicationService commerceService;
 
     public ChatApplicationService(ConversationService conversationService, EmbeddingClient embeddingClient,
                                   QdrantVectorStore vectorStore, ChatModelClient chatModelClient,
                                   KeywordKnowledgeSearch keywordKnowledgeSearch, PromptBuilder promptBuilder,
                                   ConfidenceCalculator confidenceCalculator,
                                   AppProperties properties, ObjectMapper objectMapper,
-                                  ChatMessageSourceMapper messageSourceMapper, KbChunkMapper chunkMapper) {
+                                  ChatMessageSourceMapper messageSourceMapper, KbChunkMapper chunkMapper,
+                                  CommerceApplicationService commerceService) {
         this.conversationService = conversationService;
         this.embeddingClient = embeddingClient;
         this.vectorStore = vectorStore;
@@ -61,6 +63,7 @@ public class ChatApplicationService {
         this.objectMapper = objectMapper;
         this.messageSourceMapper = messageSourceMapper;
         this.chunkMapper = chunkMapper;
+        this.commerceService = commerceService;
     }
 
     @Transactional
@@ -73,6 +76,13 @@ public class ChatApplicationService {
                 ? conversationService.create(firstTitle(question), user.userId()).id()
                 : conversation.getId();
         conversationService.saveMessage(actualConversationId, MessageRole.USER, question);
+
+        java.util.Optional<String> businessAnswer = commerceService.answerBusinessQuestion(user, question);
+        if (businessAnswer.isPresent()) {
+            ChatResponse response = new ChatResponse(actualConversationId, businessAnswer.get(), List.of(), 1.0, ConfidenceLevel.HIGH, false, null);
+            persistAssistant(response, List.of());
+            return response;
+        }
 
         List<KnowledgeChunk> chunks = mergeChunks(
                 keywordKnowledgeSearch.search(question, properties.getRag().getTopK()),
