@@ -1,169 +1,172 @@
-﻿# 智服通 - 企业智能客服问答与人工协同系统
+# 智服通
 
-智服通是从现有 Python 企业知识库问答项目重构而来的 Java + Vue 前后端分离项目，面向电商售前、物流、退款、退货、账号和售后服务场景。
+企业知识库客服与人工工单协同平台。项目定位是 Java 后端实习面试展示用的模块化单体应用，不是微服务系统。
 
-## 系统架构
+## 项目背景
 
-```text
-web(Vue 3 + Element Plus)
-        |
-        v
-server(Spring Boot)
-        |
-        +-- MySQL: 文档、会话、消息、工单
-        +-- Qdrant: 文本片段向量
-        +-- Local ONNX Embedding: 本地生成向量
-        +-- OpenAI-compatible Chat API: 生成最终回答
-```
+面向电商售后场景，用户可以咨询发货、退款、退换货、商品售后和账号问题。系统优先从企业知识库检索资料，相关度足够时调用大模型生成客服回复；相关度不足时不调用大模型，并引导用户创建人工工单。
 
-核心链路：
+## 核心业务闭环
 
-上传文件 -> 校验文件 -> 保存原始文件 -> MySQL 记录文档 -> 解析文本 -> 清洗切分 -> 生成 Embedding -> 写入 Qdrant -> 用户提问 -> 问题 Embedding -> Qdrant 检索 -> 过滤低相关结果 -> 拼接 Prompt -> 调用 Chat API -> 保存消息 -> 返回答案和来源。
+1. 管理员上传知识库文档。
+2. 系统保存文档、创建处理任务，并异步解析、切片、生成向量、写入 Qdrant。
+3. 用户登录后发起咨询。
+4. 系统执行关键词检索 + 向量检索，构建 RAG Prompt。
+5. 生成回答并保存引用来源快照。
+6. 无法可靠回答时，用户创建工单。
+7. 管理员处理工单，系统记录状态流转和操作日志。
 
 ## 技术栈
 
-- 后端：Java 17、Spring Boot 3、Maven、MyBatis-Plus、MySQL、Flyway、Qdrant、ONNX Runtime、DJL HuggingFace Tokenizers、PDFBox、POI、CommonMark、JUnit 5、Mockito、Springdoc OpenAPI
-- 前端：Vue 3、TypeScript、Vite、Vue Router、Pinia、Axios、Element Plus
-- 基础设施：Docker Compose、MySQL 8、Qdrant
+- 后端：Java 17、Spring Boot 3.3.5、Spring MVC、Spring Security、MyBatis-Plus、MySQL、Redis、Flyway、Qdrant、ONNX Runtime、WebClient
+- 前端：Vue 3、TypeScript、Vite、Element Plus、Axios
+- 文档解析：PDFBox、Apache POI、CommonMark
+- 测试：JUnit 5、Mockito
+- 部署：Docker Compose、Nginx
 
-## 安全与配置
+## 架构图
 
-复制 `.env.example` 为本地 `.env`，但不要提交 `.env`。
-
-真实调用大模型前，必须由用户提供新的 `LLM_API_KEY`。旧项目中的 API Key 已删除并失效，不读取、不恢复、不迁移。用户提供的新 Key 只能写入本地 `.env`，不得写入源码、配置模板、README、日志、测试文件或最终交付内容。
-
-`.env.example` 默认使用 Mock ChatModel，不需要 API Key 也能完成编译、启动和基础演示。需要真实调用时，在本地 `.env` 中设置 `LLM_MOCK_ENABLED=false` 并填写自己的 `LLM_API_KEY`。
-
-当前默认 Chat 模型名为 `deepseek-v4-flash`，通过 OpenAI-compatible 接口调用。
-
-## 模型准备
-
-默认 embedding 文件路径：
-
-```text
-./models/embedding/model.onnx
-./models/embedding/tokenizer.json
+```mermaid
+flowchart LR
+  Web[Vue 用户端/管理端] --> API[Spring Boot API]
+  API --> Security[Spring Security JWT Filter]
+  Security --> Redis[(Redis)]
+  API --> MySQL[(MySQL)]
+  API --> Qdrant[(Qdrant)]
+  API --> Model[OpenAI-compatible Chat API]
+  API --> ONNX[Local ONNX Embedding]
 ```
 
-可用脚本下载一个 384 维、最大长度 256 的本地 ONNX embedding 模型：
+## JWT + Redis 认证流程
+
+```mermaid
+sequenceDiagram
+  participant Web
+  participant API
+  participant Redis
+  Web->>API: POST /api/v1/auth/login
+  API->>API: BCrypt 校验密码
+  API->>Redis: 保存 Refresh Token 摘要
+  API-->>Web: Access Token + HttpOnly Refresh Cookie
+  Web->>API: Authorization: Bearer AccessToken
+  API->>Redis: 检查 Access Token jti 黑名单
+  API-->>Web: 业务响应
+```
+
+- Access Token 有效期默认 30 分钟。
+- Refresh Token 放在 HttpOnly Cookie，服务端只在 Redis 保存摘要。
+- 退出登录时删除 Refresh Token，并把当前 Access Token 的 jti 写入 Redis 黑名单。
+- 前端路由守卫只负责体验，真正权限边界在后端。
+
+## 文档处理状态机
+
+```mermaid
+stateDiagram-v2
+  [*] --> PENDING
+  PENDING --> PROCESSING
+  PROCESSING --> READY
+  PROCESSING --> FAILED
+  FAILED --> PENDING: retry
+```
+
+文档上传接口返回 202，不等待完整解析结束。处理任务记录在 `document_processing_task`，失败后进入重试等待，超过重试次数后标记为失败。
+
+## RAG 问答流程
+
+```mermaid
+flowchart TD
+  Q[用户问题] --> RL[Redis 限流]
+  RL --> E[Embedding]
+  E --> VS[Qdrant 向量检索]
+  Q --> KS[MySQL kb_chunk 关键词检索]
+  VS --> Merge[合并去重排序]
+  KS --> Merge
+  Merge --> Check{相关度足够?}
+  Check -- 否 --> Human[拒答并建议转人工]
+  Check -- 是 --> LLM[调用 ChatModelClient]
+  LLM --> Save[保存消息和 chat_message_source 来源快照]
+```
+
+## 工单状态机
+
+```mermaid
+stateDiagram-v2
+  [*] --> OPEN
+  OPEN --> PROCESSING
+  OPEN --> CLOSED
+  PROCESSING --> RESOLVED
+  PROCESSING --> CLOSED
+  RESOLVED --> CLOSED
+```
+
+非法状态流转会被拒绝。管理员处理工单时必须携带 `lockVersion`，并发修改冲突返回 409。
+
+## 主要数据表
+
+- `user_account`：用户账号、BCrypt 密码、角色和状态。
+- `kb_document`：文档元数据、SHA-256、上传人、处理状态。
+- `document_processing_task`：文档异步处理任务。
+- `kb_chunk`：持久化知识片段。
+- `chat_conversation`：用户会话。
+- `chat_message`：聊天消息。
+- `chat_message_source`：回答引用来源快照。
+- `support_ticket`：人工工单。
+- `ticket_operation_log`：工单操作日志。
+
+## 本地启动
+
+1. 复制 `.env.example` 为 `.env`。
+2. 根据需要配置 MySQL、Redis、Qdrant 和模型路径。
+3. 不提供 `LLM_API_KEY` 时，使用 Mock ChatModel。
+4. 启动基础服务：
 
 ```powershell
-.\deploy\download-embedding-model.ps1
+docker compose -f deploy/docker-compose.yml up -d mysql redis qdrant
 ```
 
-```bash
-sh deploy/download-embedding-model.sh
-```
-
-说明：脚本默认下载 `sentence-transformers/all-MiniLM-L6-v2` 的 ONNX 文件，已用于本项目本地推理验证。它偏英文，正式中文客服场景建议替换为中文或多语言 embedding 模型，并同步调整 `EMBEDDING_DIMENSION`。
-
-检查模型文件：
+5. 启动后端：
 
 ```powershell
-.\deploy\check-embedding-model.ps1
+cd server
+.\mvnw.cmd spring-boot:run
 ```
 
-```bash
-sh deploy/check-embedding-model.sh
-```
-
-## 启动依赖
-
-```bash
-docker compose -f deploy/docker-compose.yml up -d mysql qdrant
-```
-
-本机如果已有 MySQL 占用 `3306`，Docker Compose 默认把容器 MySQL 映射到本机 `3307`。
-
-## 启动后端
-
-推荐在项目根目录使用本地启动脚本，它会读取 `.env` 并把相对路径按项目根目录解析：
+6. 启动前端：
 
 ```powershell
-.\deploy\run-server-local.ps1
-```
-
-接口文档：
-
-```text
-http://127.0.0.1:18080/swagger-ui.html
-```
-
-## 启动前端
-
-```bash
 cd web
-npm install
+npm ci
 npm run dev
 ```
 
-前端开发代理默认指向 `http://127.0.0.1:18080`。如需改后端地址，可设置 `VITE_API_TARGET`。
+## 环境变量
 
-访问：
+- `JWT_SECRET`：JWT 签名密钥，至少 32 字符。
+- `ACCESS_TOKEN_TTL_MINUTES`：Access Token 有效期。
+- `REFRESH_TOKEN_TTL_DAYS`：Refresh Token 有效期。
+- `CHAT_RATE_LIMIT_PER_MINUTE`：单用户每分钟聊天次数限制。
+- `DEMO_ADMIN_USERNAME` / `DEMO_ADMIN_PASSWORD`：本地演示管理员账号。
+- `DEMO_CUSTOMER_USERNAME` / `DEMO_CUSTOMER_PASSWORD`：本地演示用户账号。
+- `LLM_API_KEY`：真实大模型 API Key，只能写入本地 `.env`。
 
-```text
-用户端登录：http://127.0.0.1:5173/user/login
-管理端登录：http://127.0.0.1:5173/admin/login
-```
+## 安全说明
 
-演示账号：
+真实 API Key 不得写入源码、README、测试文件、日志或提交历史。`.env` 已加入 `.gitignore`。当前前端为了降低项目复杂度仍把 Access Token 保存在 localStorage，存在 XSS 风险，README 不将其描述为最安全方案。
 
-- 用户端：`user / 123456`
-- 管理端：`admin / admin123`
+## 测试
 
-## 测试与构建
-
-```bash
+```powershell
 cd server
-mvn clean test
-mvn clean package
-```
+.\mvnw.cmd test
 
-```bash
 cd web
 npm run build
+
+docker compose -f deploy/docker-compose.yml config
 ```
 
-## 演示步骤
+## 当前功能边界
 
-1. 启动 MySQL 和 Qdrant。
-2. 配置本地 `.env`。
-3. 准备 embedding 模型，或开发测试时设置 `EMBEDDING_MOCK_ENABLED=true`。
-4. 启动后端和前端。
-5. 在管理后台上传 `sample-data/knowledge/` 中的演示 Markdown。
-6. 在客服端提问。
-7. 检索资料不足时，系统会拒答并建议转人工工单。
+已实现：JWT + Redis 认证、Refresh Token Cookie、退出黑名单、文档异步任务、kb_chunk 持久化、RAG 来源快照、聊天限流、工单状态机、乐观锁、操作日志、用户端和管理端页面。
 
-演示知识库已内置 3 个商品资料：
-
-- 暖风杯 H100：小家电，通常 48 小时内发货。
-- 轻氧洗面巾 C20：个护耗材，拆封后通常不支持无理由退货。
-- 云感靠枕 P9：居家纺织品，未清洗未使用且包装完整时可提交退货申请。
-
-## 已完成状态
-
-已完成：
-
-- Spring Boot 后端、Flyway 表结构、统一响应和异常处理。
-- 文档上传、解析、切分、状态管理、下载、删除、失败重试。
-- 本地 ONNX embedding 推理，向量归一化，写入 Qdrant。
-- 会话、消息和工单持久化。
-- RAG 检索、低相关拒答、来源返回、真实 Chat API 调用。
-- Vue 客服端和管理后台，前端调用真实 Java API。
-- Docker Compose、Dockerfile、Nginx 配置、模型检查和下载脚本。
-- 后端测试、前端构建、真实 MySQL + Qdrant + ONNX + dsv4 端到端验证。
-
-未实现：
-
-- OCR、真实订单系统、支付系统、权限系统、复杂报表、多租户、消息推送。这些不属于本次 MVP 范围。
-
-## 常见问题
-
-- 没有 `LLM_API_KEY`：系统使用 Mock ChatModel 完成编译和自动化测试，真实大模型调用不验证。
-- 没有本地 ONNX 模型：文档向量化会明确失败，不会自行生成随机向量。
-- Qdrant 未启动：上传文档写向量会失败，文档状态会更新为 `FAILED`。
-- PowerShell 显示中文响应乱码：这是终端编码显示问题，不代表接口 JSON 内容错误。
-
-## 原项目迁移关系
-
-见 `docs/MIGRATION_REPORT.md`。
+已补充 Docker healthcheck、Actuator health/readiness、Maven Wrapper。未完成：完整 Testcontainers 覆盖、WireMock 外部服务测试、生产级密钥管理。

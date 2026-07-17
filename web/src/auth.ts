@@ -1,26 +1,24 @@
 export type UserRole = 'customer' | 'admin'
 
 export interface SessionUser {
+  token: string
+  userId: number
+  username: string
   role: UserRole
   name: string
 }
 
 const STORAGE_KEY = 'smart-customer-service-session'
 
-export function login(role: UserRole, username: string, password: string): SessionUser | null {
-  const normalized = username.trim()
-  const matched =
-    (role === 'customer' && normalized === 'user' && password === '123456') ||
-    (role === 'admin' && normalized === 'admin' && password === 'admin123')
-
-  if (!matched) return null
-
-  const user: SessionUser = {
-    role,
-    name: role === 'admin' ? '后台管理员' : '演示用户'
-  }
+export function saveSession(user: SessionUser) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
-  return user
+}
+
+export function saveAccessToken(token: string) {
+  const user = currentUser()
+  if (!user) return
+  user.token = token
+  saveSession(user)
 }
 
 export function currentUser(): SessionUser | null {
@@ -32,6 +30,10 @@ export function currentUser(): SessionUser | null {
     localStorage.removeItem(STORAGE_KEY)
     return null
   }
+}
+
+export function sessionToken(): string | null {
+  return currentUser()?.token ?? null
 }
 
 export function logout() {

@@ -33,4 +33,4 @@ Resolve-ProjectPathEnv "EMBEDDING_MODEL_PATH"
 Resolve-ProjectPathEnv "EMBEDDING_TOKENIZER_PATH"
 
 Set-Location (Join-Path $root "server")
-mvn spring-boot:run
+.\mvnw.cmd spring-boot:run

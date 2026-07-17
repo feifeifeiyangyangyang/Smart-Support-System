@@ -53,8 +53,13 @@ async function checkHealth() {
   }
 }
 
-function handleLogout() {
+async function handleLogout() {
   const role = user.value?.role
+  try {
+    await api.post('/auth/logout')
+  } catch {
+    // Local cleanup still matters if the token has already expired.
+  }
   logout()
   user.value = null
   router.push(role === 'admin' ? '/admin/login' : '/user/login')

@@ -2,139 +2,139 @@ package com.zhifutong.customer.application;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.zhifutong.customer.client.EmbeddingClient;
+import com.zhifutong.customer.auth.AuthContext;
 import com.zhifutong.customer.client.QdrantVectorStore;
 import com.zhifutong.customer.config.AppProperties;
 import com.zhifutong.customer.domain.DocumentStatus;
+import com.zhifutong.customer.domain.DocumentTaskStatus;
+import com.zhifutong.customer.entity.DocumentProcessingTask;
 import com.zhifutong.customer.entity.KbDocument;
 import com.zhifutong.customer.exception.BusinessException;
+import com.zhifutong.customer.mapper.DocumentProcessingTaskMapper;
+import com.zhifutong.customer.mapper.KbChunkMapper;
 import com.zhifutong.customer.mapper.KbDocumentMapper;
-import com.zhifutong.customer.rag.KnowledgeChunk;
-import com.zhifutong.customer.rag.TextChunker;
-import com.zhifutong.customer.service.DocumentParser;
 import com.zhifutong.customer.service.FileValidator;
 import com.zhifutong.customer.vo.DocumentResponse;
 import com.zhifutong.customer.vo.PageResult;
-import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HexFormat;
 import java.util.UUID;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class DocumentApplicationService {
     private final KbDocumentMapper documentMapper;
+    private final DocumentProcessingTaskMapper taskMapper;
+    private final KbChunkMapper chunkMapper;
     private final FileValidator fileValidator;
-    private final DocumentParser documentParser;
-    private final TextChunker textChunker;
-    private final EmbeddingClient embeddingClient;
     private final QdrantVectorStore vectorStore;
     private final AppProperties properties;
+    private final TransactionTemplate transactionTemplate;
+    private final DocumentProcessingService processingService;
 
-    public DocumentApplicationService(KbDocumentMapper documentMapper, FileValidator fileValidator,
-                                      DocumentParser documentParser, TextChunker textChunker,
-                                      EmbeddingClient embeddingClient, QdrantVectorStore vectorStore,
-                                      AppProperties properties) {
+    public DocumentApplicationService(KbDocumentMapper documentMapper, DocumentProcessingTaskMapper taskMapper,
+                                      KbChunkMapper chunkMapper, FileValidator fileValidator,
+                                      QdrantVectorStore vectorStore, AppProperties properties,
+                                      TransactionTemplate transactionTemplate, DocumentProcessingService processingService) {
         this.documentMapper = documentMapper;
+        this.taskMapper = taskMapper;
+        this.chunkMapper = chunkMapper;
         this.fileValidator = fileValidator;
-        this.documentParser = documentParser;
-        this.textChunker = textChunker;
-        this.embeddingClient = embeddingClient;
         this.vectorStore = vectorStore;
         this.properties = properties;
+        this.transactionTemplate = transactionTemplate;
+        this.processingService = processingService;
     }
 
-    @Transactional
     public DocumentResponse upload(MultipartFile file) {
         String extension = fileValidator.validate(file);
-        String originalName = file.getOriginalFilename();
-        if (documentMapper.selectCount(new LambdaQueryWrapper<KbDocument>().eq(KbDocument::getOriginalName, originalName)) > 0) {
-            throw new BusinessException("同名文档已存在，请删除后重新上传");
-        }
         Path storageRoot = Path.of(properties.getDocument().getStoragePath()).toAbsolutePath().normalize();
         try {
             Files.createDirectories(storageRoot);
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             throw new BusinessException("文档存储目录创建失败");
         }
+
         String storageName = UUID.randomUUID() + "." + extension;
         Path target = storageRoot.resolve(storageName).normalize();
         if (!target.startsWith(storageRoot)) {
             throw new BusinessException("文件存储路径不合法");
         }
-        try {
-            file.transferTo(target);
-        } catch (IOException ex) {
-            throw new BusinessException("文件保存失败");
+
+        String sha256 = saveAndHash(file, target);
+        if (documentMapper.selectCount(new LambdaQueryWrapper<KbDocument>().eq(KbDocument::getFileSha256, sha256)) > 0) {
+            deleteQuietly(target);
+            throw new BusinessException(HttpStatus.CONFLICT, "相同内容的文档已存在，请勿重复上传");
         }
 
-        LocalDateTime now = LocalDateTime.now();
-        KbDocument document = new KbDocument();
-        document.setOriginalName(originalName);
-        document.setStorageName(storageName);
-        document.setStoragePath(target.toString());
-        document.setFileType(extension);
-        document.setFileSize(file.getSize());
-        document.setStatus(DocumentStatus.PENDING);
-        document.setChunkCount(0);
-        document.setCreatedAt(now);
-        document.setUpdatedAt(now);
-        documentMapper.insert(document);
+        try {
+            DocumentResponse response = transactionTemplate.execute(status -> {
+                LocalDateTime now = LocalDateTime.now();
+                KbDocument document = new KbDocument();
+                document.setOriginalName(file.getOriginalFilename());
+                document.setStorageName(storageName);
+                document.setStoragePath(target.toString());
+                document.setFileType(extension);
+                document.setFileSize(file.getSize());
+                document.setFileSha256(sha256);
+                document.setUploadedBy(AuthContext.require().userId());
+                document.setLockVersion(0);
+                document.setStatus(DocumentStatus.PENDING);
+                document.setChunkCount(0);
+                document.setCreatedAt(now);
+                document.setUpdatedAt(now);
+                documentMapper.insert(document);
 
-        process(document.getId());
-        return toResponse(documentMapper.selectById(document.getId()));
+                DocumentProcessingTask task = new DocumentProcessingTask();
+                task.setDocumentId(document.getId());
+                task.setStatus(DocumentTaskStatus.PENDING);
+                task.setRetryCount(0);
+                task.setMaxRetryCount(3);
+                task.setLockVersion(0);
+                task.setCreatedAt(now);
+                task.setUpdatedAt(now);
+                taskMapper.insert(task);
+                return toResponse(document);
+            });
+            if (response != null) {
+                processingService.processAsync(response.id());
+            }
+            return response;
+        } catch (RuntimeException ex) {
+            deleteQuietly(target);
+            throw ex;
+        }
     }
 
-    @Transactional
     public DocumentResponse retry(Long id) {
         KbDocument document = require(id);
         if (!document.getStatus().canRetry()) {
             throw new BusinessException("只有失败文档可以重新处理");
         }
-        process(id);
-        return toResponse(documentMapper.selectById(id));
-    }
-
-    public void process(Long id) {
-        KbDocument document = require(id);
-        try {
-            updateStatus(document, DocumentStatus.PROCESSING, null, 0);
-            String text = documentParser.parse(Path.of(document.getStoragePath()), document.getFileType());
-            List<String> texts = textChunker.split(text, properties.getRag().getChunkSize(),
-                    properties.getRag().getChunkOverlap(), properties.getRag().getMinChunkLength());
-            if (texts.isEmpty()) {
-                throw new BusinessException("文档切分后没有有效片段");
-            }
-            List<KnowledgeChunk> chunks = new ArrayList<>();
-            List<float[]> vectors = new ArrayList<>();
-            for (int i = 0; i < texts.size(); i++) {
-                String chunkText = texts.get(i);
-                chunks.add(new KnowledgeChunk(document.getId(), document.getOriginalName(), i, chunkText, 1.0));
-                vectors.add(embeddingClient.embed(chunkText));
-            }
-            vectorStore.deleteByDocumentId(document.getId());
-            vectorStore.upsert(chunks, vectors);
-            updateStatus(document, DocumentStatus.COMPLETED, null, chunks.size());
-        } catch (Exception ex) {
-            try {
-                vectorStore.deleteByDocumentId(document.getId());
-            } catch (Exception ignored) {
-                // Best-effort cleanup; original failure is recorded below.
-            }
-            updateStatus(document, DocumentStatus.FAILED, truncate(ex.getMessage()), 0);
-            if (ex instanceof BusinessException businessException) {
-                throw businessException;
-            }
-            throw new BusinessException("文档处理失败: " + ex.getMessage());
+        DocumentProcessingTask task = taskMapper.selectOne(new LambdaQueryWrapper<DocumentProcessingTask>()
+                .eq(DocumentProcessingTask::getDocumentId, id));
+        if (task == null) {
+            throw new BusinessException("文档处理任务不存在");
         }
+        task.setStatus(DocumentTaskStatus.PENDING);
+        task.setRetryCount(0);
+        task.setNextRetryAt(null);
+        task.setErrorMessage(null);
+        task.setUpdatedAt(LocalDateTime.now());
+        taskMapper.updateById(task);
+        processingService.processAsync(id);
+        return toResponse(documentMapper.selectById(id));
     }
 
     public PageResult<DocumentResponse> list(long page, long size, String keyword) {
@@ -158,23 +158,17 @@ public class DocumentApplicationService {
         return new FileSystemResource(path);
     }
 
-    @Transactional
     public String delete(Long id) {
         KbDocument document = require(id);
-        boolean qdrantDeleted = false;
-        boolean fileDeleted = false;
         try {
             vectorStore.deleteByDocumentId(id);
-            qdrantDeleted = true;
-            Path path = Path.of(document.getStoragePath());
-            fileDeleted = !Files.exists(path) || Files.deleteIfExists(path);
-            int dbDeleted = documentMapper.deleteById(id);
-            if (!qdrantDeleted || !fileDeleted || dbDeleted != 1) {
-                throw new BusinessException("文档删除不完整，请检查 Qdrant、磁盘文件和数据库状态");
-            }
-            return "Qdrant片段、磁盘文件和数据库记录均已删除";
-        } catch (IOException ex) {
-            throw new BusinessException("磁盘文件删除失败: " + ex.getMessage());
+            chunkMapper.delete(new LambdaQueryWrapper<com.zhifutong.customer.entity.KbChunk>().eq(com.zhifutong.customer.entity.KbChunk::getDocumentId, id));
+            taskMapper.delete(new LambdaQueryWrapper<DocumentProcessingTask>().eq(DocumentProcessingTask::getDocumentId, id));
+            Files.deleteIfExists(Path.of(document.getStoragePath()));
+            documentMapper.deleteById(id);
+            return "文档、知识片段、向量索引和本地文件均已删除";
+        } catch (Exception ex) {
+            throw new BusinessException("文档删除失败: " + ex.getMessage());
         }
     }
 
@@ -192,18 +186,25 @@ public class DocumentApplicationService {
                 document.getCreatedAt(), document.getUpdatedAt());
     }
 
-    private void updateStatus(KbDocument document, DocumentStatus status, String reason, int chunkCount) {
-        document.setStatus(status);
-        document.setFailureReason(reason);
-        document.setChunkCount(chunkCount);
-        document.setUpdatedAt(LocalDateTime.now());
-        documentMapper.updateById(document);
+    private String saveAndHash(MultipartFile file, Path target) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream input = new DigestInputStream(file.getInputStream(), digest);
+                 OutputStream output = Files.newOutputStream(target)) {
+                input.transferTo(output);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (Exception ex) {
+            deleteQuietly(target);
+            throw new BusinessException("文件保存或SHA-256计算失败");
+        }
     }
 
-    private String truncate(String text) {
-        if (text == null) {
-            return "未知错误";
+    private void deleteQuietly(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (Exception ignored) {
+            // Best-effort cleanup.
         }
-        return text.length() <= 500 ? text : text.substring(0, 500);
     }
 }

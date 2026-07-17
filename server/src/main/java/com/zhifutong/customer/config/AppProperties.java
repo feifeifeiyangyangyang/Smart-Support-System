@@ -10,6 +10,8 @@ public class AppProperties {
     private Embedding embedding = new Embedding();
     private Qdrant qdrant = new Qdrant();
     private Llm llm = new Llm();
+    private Auth auth = new Auth();
+    private RateLimit rateLimit = new RateLimit();
 
     public Document getDocument() { return document; }
     public void setDocument(Document document) { this.document = document; }
@@ -21,6 +23,10 @@ public class AppProperties {
     public void setQdrant(Qdrant qdrant) { this.qdrant = qdrant; }
     public Llm getLlm() { return llm; }
     public void setLlm(Llm llm) { this.llm = llm; }
+    public Auth getAuth() { return auth; }
+    public void setAuth(Auth auth) { this.auth = auth; }
+    public RateLimit getRateLimit() { return rateLimit; }
+    public void setRateLimit(RateLimit rateLimit) { this.rateLimit = rateLimit; }
 
     public static class Document {
         private String storagePath;
@@ -106,5 +112,25 @@ public class AppProperties {
         public void setModelName(String modelName) { this.modelName = modelName; }
         public boolean isMockEnabled() { return mockEnabled; }
         public void setMockEnabled(boolean mockEnabled) { this.mockEnabled = mockEnabled; }
+    }
+
+    public static class Auth {
+        private String jwtSecret;
+        private long accessTokenTtlMinutes = 30;
+        private long refreshTokenTtlDays = 7;
+
+        public String getJwtSecret() { return jwtSecret; }
+        public void setJwtSecret(String jwtSecret) { this.jwtSecret = jwtSecret; }
+        public long getAccessTokenTtlMinutes() { return accessTokenTtlMinutes; }
+        public void setAccessTokenTtlMinutes(long accessTokenTtlMinutes) { this.accessTokenTtlMinutes = accessTokenTtlMinutes; }
+        public long getRefreshTokenTtlDays() { return refreshTokenTtlDays; }
+        public void setRefreshTokenTtlDays(long refreshTokenTtlDays) { this.refreshTokenTtlDays = refreshTokenTtlDays; }
+    }
+
+    public static class RateLimit {
+        private int chatPerMinute = 20;
+
+        public int getChatPerMinute() { return chatPerMinute; }
+        public void setChatPerMinute(int chatPerMinute) { this.chatPerMinute = chatPerMinute; }
     }
 }

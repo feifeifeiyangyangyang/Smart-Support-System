@@ -10,6 +10,11 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   qdrant:
     image: qdrant/qdrant:v1.12.5
@@ -19,6 +24,24 @@ services:
       - "6334:6334"
     volumes:
       - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:6333/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: smart-customer-service-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   server:
     build:
@@ -30,17 +53,40 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-smart_customer_service}
       MYSQL_USERNAME: ${MYSQL_USERNAME:-root}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change_me}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me-at-least-32-chars}
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-30}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
+      DEMO_ADMIN_USERNAME: ${DEMO_ADMIN_USERNAME:-admin}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-admin123}
+      DEMO_CUSTOMER_USERNAME: ${DEMO_CUSTOMER_USERNAME:-user}
+      DEMO_CUSTOMER_PASSWORD: ${DEMO_CUSTOMER_PASSWORD:-123456}
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
       LLM_MODEL_NAME: ${LLM_MODEL_NAME:-deepseek-v4-flash}
       DOCUMENT_STORAGE_PATH: /app/data/documents
+      EMBEDDING_MODEL_PATH: /app/models/embedding/model.onnx
+      EMBEDDING_TOKENIZER_PATH: /app/models/embedding/tokenizer.json
     ports:
       - "8080:8080"
+    volumes:
+      - ../models/embedding:/app/models/embedding:ro
+      - document-data:/app/data/documents
     depends_on:
-      - mysql
-      - qdrant
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/readiness"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
 
   web:
     build:
@@ -49,8 +95,11 @@ services:
     ports:
       - "8088:80"
     depends_on:
-      - server
+      server:
+        condition: service_healthy
 
 volumes:
   mysql-data:
   qdrant-data:
+  redis-data:
+  document-data:

@@ -8,7 +8,8 @@ import org.junit.jupiter.api.Test;
 class TicketStatusTest {
     @Test
     void validatesTicketTransitions() {
-        assertTrue(TicketStatus.PENDING.canTransitTo(TicketStatus.PROCESSING));
+        assertTrue(TicketStatus.OPEN.canTransitTo(TicketStatus.PROCESSING));
+        assertTrue(TicketStatus.OPEN.canTransitTo(TicketStatus.CLOSED));
         assertTrue(TicketStatus.PROCESSING.canTransitTo(TicketStatus.RESOLVED));
         assertFalse(TicketStatus.CLOSED.canTransitTo(TicketStatus.PROCESSING));
     }

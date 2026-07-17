@@ -1,32 +1,29 @@
 package com.zhifutong.customer.rag;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.zhifutong.customer.config.AppProperties;
 import com.zhifutong.customer.domain.DocumentStatus;
+import com.zhifutong.customer.entity.KbChunk;
 import com.zhifutong.customer.entity.KbDocument;
+import com.zhifutong.customer.mapper.KbChunkMapper;
 import com.zhifutong.customer.mapper.KbDocumentMapper;
-import com.zhifutong.customer.service.DocumentParser;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 @Component
 public class KeywordKnowledgeSearch {
+    private final KbChunkMapper chunkMapper;
     private final KbDocumentMapper documentMapper;
-    private final DocumentParser documentParser;
-    private final TextChunker textChunker;
-    private final AppProperties properties;
 
-    public KeywordKnowledgeSearch(KbDocumentMapper documentMapper, DocumentParser documentParser,
-                                  TextChunker textChunker, AppProperties properties) {
+    public KeywordKnowledgeSearch(KbChunkMapper chunkMapper, KbDocumentMapper documentMapper) {
+        this.chunkMapper = chunkMapper;
         this.documentMapper = documentMapper;
-        this.documentParser = documentParser;
-        this.textChunker = textChunker;
-        this.properties = properties;
     }
 
     public List<KnowledgeChunk> search(String question, int limit) {
@@ -36,18 +33,20 @@ public class KeywordKnowledgeSearch {
         }
 
         List<KbDocument> documents = documentMapper.selectList(new LambdaQueryWrapper<KbDocument>()
-                .eq(KbDocument::getStatus, DocumentStatus.COMPLETED)
-                .orderByDesc(KbDocument::getUpdatedAt));
+                .in(KbDocument::getStatus, DocumentStatus.READY, DocumentStatus.COMPLETED));
+        if (documents.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, KbDocument> documentMap = documents.stream().collect(Collectors.toMap(KbDocument::getId, Function.identity()));
+        List<KbChunk> chunks = chunkMapper.selectList(new LambdaQueryWrapper<KbChunk>()
+                .in(KbChunk::getDocumentId, documentMap.keySet()));
+
         List<KnowledgeChunk> matches = new ArrayList<>();
-        for (KbDocument document : documents) {
-            String text = documentParser.parse(Path.of(document.getStoragePath()), document.getFileType());
-            List<String> chunks = textChunker.split(text, properties.getRag().getChunkSize(),
-                    properties.getRag().getChunkOverlap(), properties.getRag().getMinChunkLength());
-            for (int i = 0; i < chunks.size(); i++) {
-                double score = score(document.getOriginalName(), chunks.get(i), terms);
-                if (score >= 0.50) {
-                    matches.add(new KnowledgeChunk(document.getId(), document.getOriginalName(), i, chunks.get(i), score));
-                }
+        for (KbChunk chunk : chunks) {
+            KbDocument document = documentMap.get(chunk.getDocumentId());
+            double keywordScore = score(document.getOriginalName(), chunk.getContent(), terms);
+            if (keywordScore >= 0.50) {
+                matches.add(new KnowledgeChunk(document.getId(), document.getOriginalName(), chunk.getChunkIndex(), chunk.getContent(), keywordScore));
             }
         }
         return matches.stream()
@@ -90,10 +89,10 @@ public class KeywordKnowledgeSearch {
         if (hits == 0) {
             return 0;
         }
-        double score = 0.38 + hits * 0.08;
+        double keywordScore = 0.38 + hits * 0.08;
         if (fileName != null && terms.stream().anyMatch(term -> fileName.toLowerCase().contains(term.toLowerCase()))) {
-            score += 0.18;
+            keywordScore += 0.18;
         }
-        return Math.min(score, 0.96);
+        return Math.min(keywordScore, 0.96);
     }
 }

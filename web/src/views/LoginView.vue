@@ -16,11 +16,11 @@
         <el-form-item label="密码">
           <el-input v-model="password" type="password" show-password autocomplete="current-password" @keyup.enter="submit" />
         </el-form-item>
-        <el-button type="primary" size="large" class="login-button" :icon="Right" @click="submit">登录</el-button>
+        <el-button type="primary" size="large" class="login-button" :icon="Right" :loading="loading" @click="submit">登录</el-button>
       </el-form>
 
       <div class="demo-account">
-        演示账号：{{ isAdmin ? 'admin / admin123' : 'user / 123456' }}
+        本地演示账号由后端环境变量初始化，登录角色以后端返回为准。
       </div>
       <router-link class="switch-link" :to="isAdmin ? '/user/login' : '/admin/login'">
         {{ isAdmin ? '去用户客服端登录' : '去管理后台登录' }}
@@ -30,31 +30,42 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Right } from '@element-plus/icons-vue'
-import { login, type UserRole } from '../auth'
+import { api, unwrap, type AuthTokenResponse } from '../api'
+import { saveSession, type UserRole } from '../auth'
 
 const route = useRoute()
 const router = useRouter()
 const username = ref('')
 const password = ref('')
+const loading = ref(false)
 
 const role = computed(() => (route.meta.loginRole as UserRole) ?? 'customer')
 const isAdmin = computed(() => role.value === 'admin')
 
-watch(role, () => {
-  username.value = isAdmin.value ? 'admin' : 'user'
-  password.value = isAdmin.value ? 'admin123' : '123456'
-}, { immediate: true })
-
-function submit() {
-  const user = login(role.value, username.value, password.value)
-  if (!user) {
-    ElMessage.error('账号或密码不正确')
-    return
+async function submit() {
+  loading.value = true
+  try {
+    const data = await unwrap<AuthTokenResponse>(api.post('/auth/login', {
+      username: username.value,
+      password: password.value
+    }))
+    const actualRole: UserRole = data.user.role === 'ADMIN' ? 'admin' : 'customer'
+    saveSession({
+      token: data.accessToken,
+      userId: data.user.userId,
+      username: data.user.username,
+      name: data.user.name,
+      role: actualRole
+    })
+    router.push(actualRole === 'admin' ? '/admin' : '/chat')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '登录失败')
+  } finally {
+    loading.value = false
   }
-  router.push(user.role === 'admin' ? '/admin' : '/chat')
 }
 </script>

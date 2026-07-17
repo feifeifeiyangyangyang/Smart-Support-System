@@ -12,6 +12,9 @@ public class KbDocument {
     private String storagePath;
     private String fileType;
     private Long fileSize;
+    private String fileSha256;
+    private Long uploadedBy;
+    private Integer lockVersion;
     private DocumentStatus status;
     private Integer chunkCount;
     private String failureReason;
@@ -30,6 +33,12 @@ public class KbDocument {
     public void setFileType(String fileType) { this.fileType = fileType; }
     public Long getFileSize() { return fileSize; }
     public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+    public String getFileSha256() { return fileSha256; }
+    public void setFileSha256(String fileSha256) { this.fileSha256 = fileSha256; }
+    public Long getUploadedBy() { return uploadedBy; }
+    public void setUploadedBy(Long uploadedBy) { this.uploadedBy = uploadedBy; }
+    public Integer getLockVersion() { return lockVersion; }
+    public void setLockVersion(Integer lockVersion) { this.lockVersion = lockVersion; }
     public DocumentStatus getStatus() { return status; }
     public void setStatus(DocumentStatus status) { this.status = status; }
     public Integer getChunkCount() { return chunkCount; }

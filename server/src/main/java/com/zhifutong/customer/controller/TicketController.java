@@ -1,6 +1,7 @@
 package com.zhifutong.customer.controller;
 
 import com.zhifutong.customer.application.TicketApplicationService;
+import com.zhifutong.customer.auth.AuthContext;
 import com.zhifutong.customer.domain.TicketStatus;
 import com.zhifutong.customer.dto.CreateTicketRequest;
 import com.zhifutong.customer.dto.UpdateTicketStatusRequest;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,7 +31,20 @@ public class TicketController {
 
     @PostMapping("/api/v1/tickets")
     public ApiResponse<TicketResponse> create(@Valid @RequestBody CreateTicketRequest request) {
-        return ApiResponse.ok(ticketService.create(request.conversationId(), request.description(), request.category(), request.contact()));
+        return ApiResponse.ok(ticketService.create(AuthContext.require(), request.conversationId(), request.description(), request.category(), request.contact()));
+    }
+
+    @GetMapping("/api/v1/tickets")
+    public ApiResponse<PageResult<TicketResponse>> listMine(
+            @RequestParam(defaultValue = "1") @Min(1) long page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) long size,
+            @RequestParam(required = false) TicketStatus status) {
+        return ApiResponse.ok(ticketService.listMine(AuthContext.require(), page, size, status));
+    }
+
+    @GetMapping("/api/v1/tickets/{id}")
+    public ApiResponse<TicketResponse> getMine(@PathVariable Long id) {
+        return ApiResponse.ok(ticketService.getMine(AuthContext.require(), id));
     }
 
     @GetMapping("/api/v1/admin/tickets")
@@ -49,6 +62,6 @@ public class TicketController {
 
     @PatchMapping("/api/v1/admin/tickets/{id}/status")
     public ApiResponse<TicketResponse> updateStatus(@PathVariable Long id, @Valid @RequestBody UpdateTicketStatusRequest request) {
-        return ApiResponse.ok(ticketService.updateStatus(id, request.status(), request.handlingNote()));
+        return ApiResponse.ok(ticketService.updateStatus(AuthContext.require(), id, request.status(), request.handlingNote(), request.resolution(), request.lockVersion()));
     }
 }

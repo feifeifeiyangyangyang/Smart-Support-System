@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotNull;
 
 public record UpdateTicketStatusRequest(
         @NotNull TicketStatus status,
-        String handlingNote
+        String handlingNote,
+        String resolution,
+        Integer lockVersion
 ) {
 }

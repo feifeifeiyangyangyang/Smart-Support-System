@@ -1,76 +1,51 @@
 # 交付验证报告
 
-## 1. 创建和修改的主要内容
+## 1. 本次交付范围
 
-新项目位于 `smart-customer-service/`，包含：
+本项目位于 `smart-customer-service/`，包含：
 
-- `server/`：Spring Boot 后端源码、Flyway 迁移、自动化测试。
+- `server/`：Spring Boot 后端源码、Flyway 迁移、自动化测试、Maven Wrapper。
 - `web/`：Vue 3 + TypeScript 前端源码。
 - `deploy/`：Docker Compose、后端/前端 Dockerfile、Nginx 配置、模型检查和下载脚本。
-- `docs/MIGRATION_REPORT.md`：旧 Python 项目迁移审计报告。
+- `docs/`：迁移报告、面试说明、重构计划和简历描述。
 - `sample-data/knowledge/`：演示知识库 Markdown。
 - `.env.example`、`.gitignore`、`README.md`。
 
 ## 2. 已验证命令
 
-```bash
-mvn -q test
-mvn -q clean package
+```powershell
+cd server
+.\mvnw.cmd -q test
+.\mvnw.cmd -q package -DskipTests
+
+cd ..\web
+npm ci
 npm run build
-docker compose -f deploy/docker-compose.yml up -d mysql qdrant
+
+cd ..
+docker compose -f deploy\docker-compose.yml config
 ```
 
-接口验证：
+## 3. 当前实现状态
 
-- `GET /api/v1/health`
-- `POST /api/v1/admin/documents`
-- `GET /api/v1/admin/documents`
-- `GET /api/v1/admin/documents/{id}/download`
-- `POST /api/v1/chat`
-- `POST /api/v1/tickets`
-- `GET /api/v1/admin/tickets`
-- `PATCH /api/v1/admin/tickets/{id}/status`
+- 已实现真实后端登录、Spring Security 鉴权、JWT Access Token、Redis Refresh Token、退出黑名单。
+- 已实现用户端和管理端角色隔离，前端登录不再是演示状态。
+- 已实现知识库文档上传、SHA-256 去重、异步任务、文本切片持久化和 Qdrant 写入。
+- 已实现 RAG 检索、低相关拒答、回答来源快照保存。
+- 已实现聊天 Redis 限流，超限请求不会继续调用 Embedding、Qdrant 或大模型。
+- 已实现工单状态机、管理员处理、操作日志和乐观锁并发保护。
+- 已补充 Docker Compose 健康检查、Actuator health/readiness 和 Maven Wrapper。
 
-## 3. 真实链路验证结果
+## 4. 安全说明
 
-已完成真实端到端验证：
+- `.env` 已被 `.gitignore` 排除，不会提交到仓库。
+- `.env.example` 只保留占位配置和 Mock 默认值。
+- 真实 API Key 只能放在本地 `.env`，不能写入源码、模板、README、测试文件、日志或交付内容。
+- 当前自动化测试和构建默认可以在 Mock ChatModel 下完成；真实大模型调用需要本地提供有效 `LLM_API_KEY` 后再验证。
 
-- MySQL 8.4 Docker 容器，端口 `3307`。
-- Qdrant Docker 容器，端口 `6333`。
-- 本地 ONNX embedding，`embeddingMockEnabled=false`。
-- 上传 Markdown 文档成功，状态 `COMPLETED`，向量写入 Qdrant。
-- `POST /api/v1/chat` 成功返回答案、来源片段、检索分数和置信等级。
-- 使用本地 `.env` 中的新 Key 调用真实 DeepSeek/OpenAI-compatible Chat API，模型为 `deepseek-v4-flash`。
+## 5. 尚未完成的生产级能力
 
-验证过程中没有在源码、配置模板、README、日志、测试文件或交付内容中输出 API Key。
-
-## 4. 测试结果
-
-- `mvn -q test`：通过。
-- 后端覆盖文本切分、文件校验、文件名安全、置信等级、Prompt 组装、文档状态、工单状态、聊天服务拒答和模型调用分支。
-- `mvn -q clean package`：通过。
-- `npm run build`：通过。Vite 有 Element Plus chunk size warning，不影响可用性。
-
-## 5. 已完成功能
-
-- MySQL + Flyway 自动建表。
-- Qdrant collection 创建、文档向量写入和检索。
-- 文档上传、解析、切分、下载、列表、删除、失败重试。
-- 会话创建、消息保存、消息清空。
-- 客服问答、来源返回、低相关拒答、转人工判断。
-- 工单创建、列表、状态处理。
-- 前端客服页面和管理后台调用真实 Java API。
-- `.env` 已被 `.gitignore` 排除，`.env.example` 只包含占位符。
-
-## 6. 未纳入 MVP 的功能
-
-- OCR。
-- 真实订单、支付、权限系统。
-- 复杂报表、多租户、消息推送。
-
-## 7. 已知说明
-
-- 本机 `3306` 和 `8080` 被占用，验证时 MySQL 使用 `3307`，后端使用 `18080`。
-- PowerShell 显示中文接口响应时可能乱码，这是终端编码显示问题。
-- Flyway 提示 MySQL 8.4 新于当前已测试版本，是兼容性警告；迁移已成功执行。
-- 本地验证使用 `sentence-transformers/all-MiniLM-L6-v2` 的 ONNX 模型，偏英文；正式中文客服效果建议换中文或多语言 embedding 模型。
+- 未补齐完整 Testcontainers 集成测试。
+- 未接入 WireMock 外部服务契约测试。
+- 未实现生产级密钥管理、审计系统、多租户和消息推送。
+- 未接入真实订单、支付、物流系统。

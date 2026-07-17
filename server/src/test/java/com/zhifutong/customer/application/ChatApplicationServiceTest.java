@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -14,11 +16,16 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhifutong.customer.TestPropertiesFactory;
+import com.zhifutong.customer.auth.AuthContext;
+import com.zhifutong.customer.auth.AuthenticatedUser;
 import com.zhifutong.customer.client.ChatModelClient;
 import com.zhifutong.customer.client.EmbeddingClient;
 import com.zhifutong.customer.client.QdrantVectorStore;
 import com.zhifutong.customer.domain.ConfidenceLevel;
+import com.zhifutong.customer.domain.UserRole;
 import com.zhifutong.customer.exception.BusinessException;
+import com.zhifutong.customer.mapper.ChatMessageSourceMapper;
+import com.zhifutong.customer.mapper.KbChunkMapper;
 import com.zhifutong.customer.rag.ConfidenceCalculator;
 import com.zhifutong.customer.rag.KeywordKnowledgeSearch;
 import com.zhifutong.customer.rag.KnowledgeChunk;
@@ -28,6 +35,7 @@ import com.zhifutong.customer.vo.ConversationResponse;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class ChatApplicationServiceTest {
@@ -36,6 +44,8 @@ class ChatApplicationServiceTest {
     private QdrantVectorStore vectorStore;
     private KeywordKnowledgeSearch keywordKnowledgeSearch;
     private ChatModelClient chatModelClient;
+    private ChatMessageSourceMapper messageSourceMapper;
+    private KbChunkMapper chunkMapper;
     private ChatApplicationService service;
 
     @BeforeEach
@@ -45,6 +55,8 @@ class ChatApplicationServiceTest {
         vectorStore = mock(QdrantVectorStore.class);
         keywordKnowledgeSearch = mock(KeywordKnowledgeSearch.class);
         chatModelClient = mock(ChatModelClient.class);
+        messageSourceMapper = mock(ChatMessageSourceMapper.class);
+        chunkMapper = mock(KbChunkMapper.class);
         var properties = TestPropertiesFactory.create();
         service = new ChatApplicationService(
                 conversationService,
@@ -55,13 +67,21 @@ class ChatApplicationServiceTest {
                 new PromptBuilder(),
                 new ConfidenceCalculator(properties),
                 properties,
-                new ObjectMapper()
+                new ObjectMapper(),
+                messageSourceMapper,
+                chunkMapper
         );
-        when(conversationService.create(any())).thenReturn(new ConversationResponse(1L, "C001", "匿名客服会话",
+        AuthContext.set(new AuthenticatedUser(1L, "user", "演示用户", UserRole.CUSTOMER, "test-token-id"));
+        when(conversationService.create(anyString(), anyLong())).thenReturn(new ConversationResponse(1L, "C001", "匿名客服会话",
                 null, LocalDateTime.now(), LocalDateTime.now()));
         doNothing().when(conversationService).saveAssistantMessage(any());
         when(embeddingClient.embed(any())).thenReturn(new float[] {0.1f, 0.2f});
         when(keywordKnowledgeSearch.search(any(), anyInt())).thenReturn(List.of());
+    }
+
+    @AfterEach
+    void tearDown() {
+        AuthContext.clear();
     }
 
     @Test

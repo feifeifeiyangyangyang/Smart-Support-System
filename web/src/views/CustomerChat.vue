@@ -55,6 +55,17 @@
         </div>
         <div class="metric">当前置信等级：{{ confidenceLabel }}</div>
         <div class="metric">是否建议人工：{{ needHuman ? '是' : '否' }}</div>
+
+        <div class="side-title ticket-title">我的工单</div>
+        <div v-if="!tickets.length" class="empty-source">暂无工单。需要人工处理时可以点击“转人工”。</div>
+        <div v-for="item in tickets" :key="item.id" class="ticket-item">
+          <div class="ticket-row">
+            <strong>{{ item.ticketNo }}</strong>
+            <el-tag size="small" :type="statusType(item.status)">{{ statusLabel(item.status) }}</el-tag>
+          </div>
+          <p>{{ item.description }}</p>
+          <small v-if="item.handlingNote">处理备注：{{ item.handlingNote }}</small>
+        </div>
       </aside>
     </div>
 
@@ -80,7 +91,7 @@
       </el-form>
       <template #footer>
         <el-button @click="ticketVisible = false">取消</el-button>
-        <el-button type="primary" @click="createTicket">提交</el-button>
+        <el-button type="primary" :loading="ticketSubmitting" @click="createTicket">提交</el-button>
       </template>
     </el-dialog>
   </section>
@@ -105,6 +116,15 @@ interface SourceReference {
   score: number
 }
 
+interface TicketRow {
+  id: number
+  ticketNo: string
+  category: string
+  status: string
+  description: string
+  handlingNote?: string
+}
+
 const quickQuestions = [
   '商品什么时候发货？',
   '暖风杯 H100 什么时候发货？',
@@ -116,10 +136,12 @@ const quickQuestions = [
 const question = ref('')
 const conversationId = ref<number | null>(null)
 const messages = ref<MessageRow[]>([])
+const tickets = ref<TicketRow[]>([])
 const lastSources = ref<SourceReference[]>([])
 const confidenceLevel = ref('')
 const needHuman = ref(false)
 const sending = ref(false)
+const ticketSubmitting = ref(false)
 const ticketVisible = ref(false)
 const messageListRef = ref<HTMLElement | null>(null)
 const ticket = reactive({ category: 'OTHER', contact: '', description: '' })
@@ -134,6 +156,7 @@ const confidenceLabel = computed(() => {
 onMounted(async () => {
   const conversation = await unwrap<{ id: number }>(api.post('/conversations', { title: '用户客服会话' }))
   conversationId.value = conversation.id
+  await loadTickets()
 })
 
 async function reloadMessages() {
@@ -183,9 +206,37 @@ async function createTicket() {
     ElMessage.warning('请先填写问题描述')
     return
   }
-  await unwrap(api.post('/tickets', { conversationId: conversationId.value, ...ticket }))
-  ElMessage.success('工单已创建')
-  ticketVisible.value = false
+  ticketSubmitting.value = true
+  try {
+    await unwrap(api.post('/tickets', { conversationId: conversationId.value, ...ticket }))
+    ElMessage.success('工单已创建')
+    ticketVisible.value = false
+    await loadTickets()
+  } finally {
+    ticketSubmitting.value = false
+  }
+}
+
+async function loadTickets() {
+  const data = await unwrap<{ records: TicketRow[] }>(api.get('/tickets'))
+  tickets.value = data.records
+}
+
+function statusLabel(status: string) {
+  return {
+    OPEN: '待处理',
+    PROCESSING: '处理中',
+    PENDING: '待处理',
+    RESOLVED: '已解决',
+    CLOSED: '已关闭'
+  }[status] ?? status
+}
+
+function statusType(status: string) {
+  if (status === 'RESOLVED') return 'success'
+  if (status === 'PROCESSING') return 'warning'
+  if (status === 'CLOSED') return 'info'
+  return 'primary'
 }
 </script>
 
@@ -276,13 +327,18 @@ async function createTicket() {
   font-weight: 600;
 }
 
+.ticket-title {
+  margin-top: 18px;
+}
+
 .empty-source {
   color: #8b7d72;
   font-size: 14px;
   line-height: 1.6;
 }
 
-.source-item {
+.source-item,
+.ticket-item {
   padding: 12px 0;
   border-bottom: 1px solid #f0e5dc;
 }
@@ -292,10 +348,25 @@ async function createTicket() {
   margin-bottom: 6px;
 }
 
-.source-item p {
+.source-item p,
+.ticket-item p {
   margin: 0;
   color: #6b5f58;
   line-height: 1.6;
+}
+
+.ticket-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.ticket-item small {
+  display: block;
+  color: #8b7d72;
+  margin-top: 6px;
 }
 
 @media (max-width: 640px) {

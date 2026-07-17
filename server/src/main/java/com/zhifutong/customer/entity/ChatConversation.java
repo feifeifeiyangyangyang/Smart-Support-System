@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 @TableName("chat_conversation")
 public class ChatConversation {
     private Long id;
+    private Long userId;
     private String conversationNo;
     private String title;
     private ConversationStatus status;
@@ -15,6 +16,8 @@ public class ChatConversation {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
     public String getConversationNo() { return conversationNo; }
     public void setConversationNo(String conversationNo) { this.conversationNo = conversationNo; }
     public String getTitle() { return title; }

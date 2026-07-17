@@ -3,7 +3,7 @@ package com.zhifutong.customer.domain;
 import java.util.Set;
 
 public enum TicketStatus {
-    PENDING,
+    OPEN,
     PROCESSING,
     RESOLVED,
     CLOSED;
@@ -13,7 +13,7 @@ public enum TicketStatus {
             return true;
         }
         return switch (this) {
-            case PENDING -> Set.of(PROCESSING, CLOSED).contains(next);
+            case OPEN -> Set.of(PROCESSING, CLOSED).contains(next);
             case PROCESSING -> Set.of(RESOLVED, CLOSED).contains(next);
             case RESOLVED -> next == CLOSED;
             case CLOSED -> false;

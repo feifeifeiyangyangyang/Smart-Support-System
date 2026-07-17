@@ -35,7 +35,7 @@
         <div class="panel">
           <div class="toolbar">
             <el-select v-model="ticketStatus" clearable placeholder="状态筛选" class="toolbar-select" @change="loadTickets">
-              <el-option label="待处理" value="PENDING" />
+              <el-option label="待处理" value="OPEN" />
               <el-option label="处理中" value="PROCESSING" />
               <el-option label="已解决" value="RESOLVED" />
               <el-option label="已关闭" value="CLOSED" />
@@ -51,14 +51,17 @@
               </template>
             </el-table-column>
             <el-table-column prop="description" label="描述" min-width="220" />
-            <el-table-column label="处理" width="260">
+            <el-table-column label="处理" width="360">
               <template #default="{ row }">
-                <el-select v-model="row.nextStatus" placeholder="新状态" style="width: 120px">
-                  <el-option label="处理中" value="PROCESSING" />
-                  <el-option label="已解决" value="RESOLVED" />
-                  <el-option label="已关闭" value="CLOSED" />
-                </el-select>
-                <el-button text type="primary" @click="updateTicket(row)">保存</el-button>
+                <div class="ticket-action">
+                  <el-select v-model="row.nextStatus" placeholder="新状态" style="width: 120px">
+                    <el-option label="处理中" value="PROCESSING" />
+                    <el-option label="已解决" value="RESOLVED" />
+                    <el-option label="已关闭" value="CLOSED" />
+                  </el-select>
+                  <el-input v-model="row.resolution" placeholder="处理结果/备注" />
+                  <el-button text type="primary" @click="updateTicket(row)">保存</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -89,7 +92,9 @@ interface TicketRow {
   category: string
   status: string
   description: string
+  lockVersion: number
   nextStatus?: string
+  resolution?: string
 }
 
 const keyword = ref('')
@@ -153,14 +158,22 @@ async function loadTickets() {
 
 async function updateTicket(row: TicketRow) {
   if (!row.nextStatus) return
-  await unwrap(api.patch(`/admin/tickets/${row.id}/status`, { status: row.nextStatus, handlingNote: '后台已处理' }))
+  await unwrap(api.patch(`/admin/tickets/${row.id}/status`, {
+    status: row.nextStatus,
+    handlingNote: row.resolution || '后台已处理',
+    resolution: row.nextStatus === 'RESOLVED' ? row.resolution : undefined,
+    lockVersion: row.lockVersion
+  }))
+  ElMessage.success('工单已更新')
   await loadTickets()
 }
 
 function statusLabel(status: string) {
   return {
     COMPLETED: '已完成',
+    READY: '已就绪',
     PROCESSING: '处理中',
+    OPEN: '待处理',
     PENDING: '待处理',
     FAILED: '失败',
     RESOLVED: '已解决',
@@ -169,10 +182,25 @@ function statusLabel(status: string) {
 }
 
 function statusType(status: string) {
-  if (status === 'COMPLETED' || status === 'RESOLVED') return 'success'
+  if (status === 'COMPLETED' || status === 'READY' || status === 'RESOLVED') return 'success'
   if (status === 'PROCESSING') return 'warning'
   if (status === 'FAILED') return 'danger'
   if (status === 'CLOSED') return 'info'
   return 'primary'
 }
 </script>
+
+<style scoped>
+.ticket-action {
+  display: grid;
+  grid-template-columns: 120px minmax(120px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 760px) {
+  .ticket-action {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

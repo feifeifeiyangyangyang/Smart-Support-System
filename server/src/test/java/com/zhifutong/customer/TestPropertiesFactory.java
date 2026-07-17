@@ -44,6 +44,12 @@ public final class TestPropertiesFactory {
         qdrant.setPort(6333);
         qdrant.setCollection("test");
         properties.setQdrant(qdrant);
+
+        AppProperties.Auth auth = new AppProperties.Auth();
+        auth.setJwtSecret("test-secret-change-me-at-least-32-chars");
+        auth.setAccessTokenTtlMinutes(30);
+        auth.setRefreshTokenTtlDays(7);
+        properties.setAuth(auth);
         return properties;
     }
 }

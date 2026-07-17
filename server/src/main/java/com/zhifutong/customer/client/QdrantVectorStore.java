@@ -54,7 +54,7 @@ public class QdrantVectorStore {
         for (int i = 0; i < chunks.size(); i++) {
             KnowledgeChunk chunk = chunks.get(i);
             points.add(Map.of(
-                    "id", UUID.nameUUIDFromBytes("%d-%d".formatted(chunk.documentId(), chunk.chunkIndex()).getBytes(StandardCharsets.UTF_8)).toString(),
+                    "id", UUID.nameUUIDFromBytes("doc:%d:chunk:%d".formatted(chunk.documentId(), chunk.chunkIndex()).getBytes(StandardCharsets.UTF_8)).toString(),
                     "vector", toList(vectors.get(i)),
                     "payload", Map.of(
                             "documentId", chunk.documentId(),

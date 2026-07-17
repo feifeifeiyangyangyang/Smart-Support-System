@@ -2,6 +2,9 @@ package com.zhifutong.customer.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zhifutong.customer.auth.AuthContext;
+import com.zhifutong.customer.auth.AuthenticatedUser;
 import com.zhifutong.customer.client.ChatModelClient;
 import com.zhifutong.customer.client.EmbeddingClient;
 import com.zhifutong.customer.client.QdrantVectorStore;
@@ -10,7 +13,11 @@ import com.zhifutong.customer.domain.ConfidenceLevel;
 import com.zhifutong.customer.domain.MessageRole;
 import com.zhifutong.customer.entity.ChatConversation;
 import com.zhifutong.customer.entity.ChatMessage;
+import com.zhifutong.customer.entity.ChatMessageSource;
+import com.zhifutong.customer.entity.KbChunk;
 import com.zhifutong.customer.exception.BusinessException;
+import com.zhifutong.customer.mapper.ChatMessageSourceMapper;
+import com.zhifutong.customer.mapper.KbChunkMapper;
 import com.zhifutong.customer.rag.ConfidenceCalculator;
 import com.zhifutong.customer.rag.KeywordKnowledgeSearch;
 import com.zhifutong.customer.rag.KnowledgeChunk;
@@ -34,12 +41,15 @@ public class ChatApplicationService {
     private final ConfidenceCalculator confidenceCalculator;
     private final AppProperties properties;
     private final ObjectMapper objectMapper;
+    private final ChatMessageSourceMapper messageSourceMapper;
+    private final KbChunkMapper chunkMapper;
 
     public ChatApplicationService(ConversationService conversationService, EmbeddingClient embeddingClient,
                                   QdrantVectorStore vectorStore, ChatModelClient chatModelClient,
                                   KeywordKnowledgeSearch keywordKnowledgeSearch, PromptBuilder promptBuilder,
                                   ConfidenceCalculator confidenceCalculator,
-                                  AppProperties properties, ObjectMapper objectMapper) {
+                                  AppProperties properties, ObjectMapper objectMapper,
+                                  ChatMessageSourceMapper messageSourceMapper, KbChunkMapper chunkMapper) {
         this.conversationService = conversationService;
         this.embeddingClient = embeddingClient;
         this.vectorStore = vectorStore;
@@ -49,15 +59,18 @@ public class ChatApplicationService {
         this.confidenceCalculator = confidenceCalculator;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.messageSourceMapper = messageSourceMapper;
+        this.chunkMapper = chunkMapper;
     }
 
     @Transactional
     public ChatResponse chat(Long conversationId, String question) {
+        AuthenticatedUser user = AuthContext.require();
         ChatConversation conversation = conversationId == null
                 ? null
-                : conversationService.require(conversationId);
+                : conversationService.requireAccessible(conversationId, user);
         Long actualConversationId = conversation == null
-                ? conversationService.create(firstTitle(question)).id()
+                ? conversationService.create(firstTitle(question), user.userId()).id()
                 : conversation.getId();
         conversationService.saveMessage(actualConversationId, MessageRole.USER, question);
 
@@ -73,7 +86,7 @@ public class ChatApplicationService {
         if (chunks.isEmpty()) {
             ChatResponse response = refuse(actualConversationId,
                     "这个问题我这边还缺少可核实的业务资料。请补充商品名称或订单号，我可以继续帮你判断；如果涉及具体订单状态，建议转人工核实。");
-            persistAssistant(response);
+            persistAssistant(response, List.of());
             return response;
         }
 
@@ -82,7 +95,7 @@ public class ChatApplicationService {
         if (level == ConfidenceLevel.LOW) {
             ChatResponse response = refuse(actualConversationId,
                     "我没有找到足够相关的规则，不能直接给你下结论。请补充商品名称、订单号或问题截图，客服可以继续核实。");
-            persistAssistant(response);
+            persistAssistant(response, List.of());
             return response;
         }
 
@@ -96,7 +109,7 @@ public class ChatApplicationService {
                 .map(chunk -> new SourceReference(chunk.documentId(), chunk.fileName(), snippet(chunk.content()), chunk.score()))
                 .toList();
         ChatResponse response = new ChatResponse(actualConversationId, answer, sources, bestScore, level, false, null);
-        persistAssistant(response);
+        persistAssistant(response, chunks);
         return response;
     }
 
@@ -104,7 +117,7 @@ public class ChatApplicationService {
         return new ChatResponse(conversationId, answer, List.of(), 0.0, ConfidenceLevel.LOW, true, null);
     }
 
-    private void persistAssistant(ChatResponse response) {
+    private void persistAssistant(ChatResponse response, List<KnowledgeChunk> chunks) {
         ChatMessage message = new ChatMessage();
         message.setConversationId(response.conversationId());
         message.setRole(MessageRole.ASSISTANT);
@@ -115,6 +128,22 @@ public class ChatApplicationService {
         message.setNeedHuman(response.needHuman());
         message.setCreatedAt(LocalDateTime.now());
         conversationService.saveAssistantMessage(message);
+        for (int i = 0; i < chunks.size(); i++) {
+            KnowledgeChunk chunk = chunks.get(i);
+            KbChunk storedChunk = chunkMapper.selectOne(new LambdaQueryWrapper<KbChunk>()
+                    .eq(KbChunk::getDocumentId, chunk.documentId())
+                    .eq(KbChunk::getChunkIndex, chunk.chunkIndex())
+                    .last("LIMIT 1"));
+            ChatMessageSource source = new ChatMessageSource();
+            source.setMessageId(message.getId());
+            source.setDocumentId(chunk.documentId());
+            source.setChunkId(storedChunk == null ? null : storedChunk.getId());
+            source.setRankNo(i + 1);
+            source.setRetrievalScore(BigDecimal.valueOf(chunk.score()));
+            source.setSnippetSnapshot(snippet(chunk.content()));
+            source.setCreatedAt(LocalDateTime.now());
+            messageSourceMapper.insert(source);
+        }
     }
 
     private String toJson(Object value) {

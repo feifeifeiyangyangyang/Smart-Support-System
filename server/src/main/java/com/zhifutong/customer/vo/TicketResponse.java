@@ -6,13 +6,19 @@ import java.time.LocalDateTime;
 
 public record TicketResponse(
         Long id,
+        Long userId,
         String ticketNo,
         Long conversationId,
         TicketCategory category,
         String description,
         String contact,
         TicketStatus status,
+        Long handlerId,
+        String priority,
         String handlingNote,
+        String resolution,
+        LocalDateTime resolvedAt,
+        Integer lockVersion,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
