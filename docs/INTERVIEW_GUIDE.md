@@ -14,6 +14,12 @@
 
 代码路径：`application/CommerceApplicationService.java`、`controller/CommerceController.java`
 
+## 1.2 模拟下单和仪表盘解决什么问题？
+
+回答：模拟下单让演示链路从“商品 -> 订单 -> 发货咨询 -> 管理端更新物流”完整闭环。仪表盘让管理员一进后台就能看到今日咨询、待发货订单、配送中订单、待处理工单和知识库状态，项目更像真实运营后台。
+
+代码路径：`CommerceApplicationService.createOrder`、`CommerceApplicationService.dashboard`
+
 ## 2. JWT 为什么还需要 Redis？
 
 回答：JWT 负责证明“用户是谁”，Redis 负责控制“这次登录现在是否还有效”。退出登录时可以删除 Refresh Token，并把 Access Token 的 jti 写入黑名单，实现立即失效。

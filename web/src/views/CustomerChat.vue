@@ -10,7 +10,7 @@
 
     <div class="chat-layout">
       <div class="panel conversation">
-        <div class="welcome">您好，请直接描述问题。可以带上订单号或商品名，我会先帮您查订单和物流。</div>
+        <div class="welcome">您好，请直接描述问题。可以说“最近订单”“第二个订单”或带上商品名，我会先帮您查订单和物流。</div>
         <div class="quick">
           <el-button v-for="item in quickQuestions" :key="item" size="small" round @click="ask(item)">
             {{ item }}
@@ -20,9 +20,9 @@
         <div ref="messageListRef" class="messages" aria-live="polite">
           <div v-if="!messages.length" class="empty-chat">
             <strong>可以这样问：</strong>
-            <span>“我的订单什么时候发货？”</span>
-            <span>“ORD202607160002 物流到哪了？”</span>
-            <span>“轻氧洗面巾 C20 拆封后能退吗？”</span>
+            <span>“我刚买的杯子什么时候发货？”</span>
+            <span>“第二个订单物流到哪了？”</span>
+            <span>“这个拆封后还能退吗？”</span>
           </div>
           <div v-for="message in messages" :key="message.id" class="message" :class="message.role.toLowerCase()">
             <div class="role">{{ message.role === 'USER' ? '我' : '客服' }}</div>
@@ -34,7 +34,7 @@
           <el-input
             v-model="question"
             aria-label="输入客服问题"
-            placeholder="例如：我的订单什么时候发货？"
+            placeholder="例如：我刚买的杯子什么时候发货？"
             :disabled="sending"
             @keyup.enter="ask(question)"
           />
@@ -46,8 +46,22 @@
       </div>
 
       <aside class="panel side">
-        <div class="side-title">我的订单</div>
-        <div v-if="!orders.length" class="empty-source">暂无订单。</div>
+        <div class="side-title">可下单商品</div>
+        <div v-if="!products.length" class="empty-source">暂无商品。</div>
+        <div v-for="product in products" :key="product.id" class="product-item">
+          <div class="ticket-row">
+            <strong>{{ product.productName }}</strong>
+            <el-tag size="small" :type="product.saleStatus === 'ON_SALE' ? 'success' : 'info'">{{ productStatusLabel(product.saleStatus) }}</el-tag>
+          </div>
+          <p>¥{{ product.price }}，库存 {{ product.stockQuantity }}</p>
+          <small>{{ product.dispatchRule }}</small>
+          <el-button class="mini-action" size="small" type="primary" :icon="ShoppingCart" @click="openOrderDialog(product)">
+            模拟下单
+          </el-button>
+        </div>
+
+        <div class="side-title source-title">我的订单</div>
+        <div v-if="!orders.length" class="empty-source">暂无订单，可以先从上方模拟下单。</div>
         <div v-for="order in orders" :key="order.id" class="order-item">
           <div class="ticket-row">
             <strong>{{ order.orderNo }}</strong>
@@ -80,6 +94,33 @@
       </aside>
     </div>
 
+    <el-dialog v-model="orderVisible" title="模拟下单" width="520px">
+      <el-form label-width="92px">
+        <el-form-item label="商品">
+          <strong>{{ selectedProduct?.productName }}</strong>
+        </el-form-item>
+        <el-form-item label="数量">
+          <el-input-number v-model="orderForm.quantity" :min="1" :max="20" />
+        </el-form-item>
+        <el-form-item label="收货人">
+          <el-input v-model="orderForm.receiverName" />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="orderForm.receiverPhone" />
+        </el-form-item>
+        <el-form-item label="地址">
+          <el-input v-model="orderForm.receiverAddress" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="orderForm.remark" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="orderVisible = false">取消</el-button>
+        <el-button type="primary" :loading="orderSubmitting" @click="createOrder">确认下单</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="ticketVisible" title="创建人工工单" width="460px">
       <el-form label-width="90px">
         <el-form-item label="问题分类">
@@ -111,7 +152,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Delete, Promotion, Service } from '@element-plus/icons-vue'
+import { Delete, Promotion, Service, ShoppingCart } from '@element-plus/icons-vue'
 import { api, unwrap } from '../api'
 
 interface MessageRow {
@@ -140,6 +181,10 @@ interface ProductRow {
   id: number
   productCode: string
   productName: string
+  saleStatus: string
+  price: string
+  stockQuantity: number
+  dispatchRule: string
 }
 
 interface ShipmentEvent {
@@ -159,25 +204,36 @@ interface OrderRow {
 }
 
 const quickQuestions = [
-  '我的订单什么时候发货？',
-  'ORD202607160002 物流到哪了？',
+  '我刚买的杯子什么时候发货？',
+  '第二个订单物流到哪了？',
+  '这个拆封后还能退吗？',
   '暖风杯 H100 还有库存吗？',
-  '轻氧洗面巾 C20 拆封后能退吗？',
   '收到破损商品怎么办？'
 ]
 const question = ref('')
 const conversationId = ref<number | null>(null)
 const messages = ref<MessageRow[]>([])
 const tickets = ref<TicketRow[]>([])
+const products = ref<ProductRow[]>([])
 const orders = ref<OrderRow[]>([])
 const lastSources = ref<SourceReference[]>([])
 const confidenceLevel = ref('')
 const needHuman = ref(false)
 const sending = ref(false)
 const ticketSubmitting = ref(false)
+const orderSubmitting = ref(false)
 const ticketVisible = ref(false)
+const orderVisible = ref(false)
+const selectedProduct = ref<ProductRow | null>(null)
 const messageListRef = ref<HTMLElement | null>(null)
 const ticket = reactive({ category: 'OTHER', contact: '', description: '' })
+const orderForm = reactive({
+  quantity: 1,
+  receiverName: '张同学',
+  receiverPhone: '13800000001',
+  receiverAddress: '上海市浦东新区演示路 100 号',
+  remark: ''
+})
 
 const confidenceLabel = computed(() => {
   if (confidenceLevel.value === 'HIGH') return '高'
@@ -189,7 +245,7 @@ const confidenceLabel = computed(() => {
 onMounted(async () => {
   const conversation = await unwrap<{ id: number }>(api.post('/conversations', { title: '用户客服会话' }))
   conversationId.value = conversation.id
-  await Promise.all([loadTickets(), loadOrders()])
+  await Promise.all([loadTickets(), loadOrders(), loadProducts()])
 })
 
 async function reloadMessages() {
@@ -234,6 +290,30 @@ async function clearConversation() {
   needHuman.value = false
 }
 
+function openOrderDialog(product: ProductRow) {
+  selectedProduct.value = product
+  orderForm.quantity = 1
+  orderVisible.value = true
+}
+
+async function createOrder() {
+  if (!selectedProduct.value) return
+  orderSubmitting.value = true
+  try {
+    await unwrap(api.post('/orders', {
+      productId: selectedProduct.value.id,
+      ...orderForm
+    }))
+    ElMessage.success('订单已创建，可以直接询问发货和物流')
+    orderVisible.value = false
+    await Promise.all([loadOrders(), loadProducts()])
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '下单失败')
+  } finally {
+    orderSubmitting.value = false
+  }
+}
+
 async function createTicket() {
   if (!conversationId.value) return
   if (!ticket.description.trim()) {
@@ -261,6 +341,11 @@ async function loadOrders() {
   orders.value = data.records
 }
 
+async function loadProducts() {
+  const data = await unwrap<{ records: ProductRow[] }>(api.get('/products'))
+  products.value = data.records
+}
+
 function statusLabel(status: string) {
   return {
     OPEN: '待处理',
@@ -275,6 +360,14 @@ function statusType(status: string) {
   if (status === 'PROCESSING') return 'warning'
   if (status === 'CLOSED') return 'info'
   return 'primary'
+}
+
+function productStatusLabel(status: string) {
+  return {
+    ON_SALE: '在售',
+    OUT_OF_STOCK: '缺货',
+    OFF_SHELF: '下架'
+  }[status] ?? status
 }
 
 function orderStatusLabel(status: string) {
@@ -319,7 +412,7 @@ function formatDate(value?: string) {
 
 .chat-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
 }
 
@@ -409,7 +502,8 @@ function formatDate(value?: string) {
 
 .source-item,
 .ticket-item,
-.order-item {
+.order-item,
+.product-item {
   padding: 12px 0;
   border-bottom: 1px solid #f0e5dc;
 }
@@ -421,7 +515,8 @@ function formatDate(value?: string) {
 
 .source-item p,
 .ticket-item p,
-.order-item p {
+.order-item p,
+.product-item p {
   margin: 0;
   color: #6b5f58;
   line-height: 1.6;
@@ -436,10 +531,15 @@ function formatDate(value?: string) {
 }
 
 .ticket-item small,
-.order-item small {
+.order-item small,
+.product-item small {
   display: block;
   color: #8b7d72;
   margin-top: 6px;
+}
+
+.mini-action {
+  margin-top: 8px;
 }
 
 @media (max-width: 640px) {

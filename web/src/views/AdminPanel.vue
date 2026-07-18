@@ -2,6 +2,47 @@
   <section>
     <h1 class="page-title">管理后台</h1>
     <el-tabs>
+      <el-tab-pane label="数据概览">
+        <div class="dashboard-grid">
+          <div class="panel metric-card">
+            <span>今日咨询</span>
+            <strong>{{ dashboard.todayConsultations }}</strong>
+          </div>
+          <div class="panel metric-card">
+            <span>待发货订单</span>
+            <strong>{{ dashboard.waitingShipmentOrders }}</strong>
+          </div>
+          <div class="panel metric-card">
+            <span>配送中订单</span>
+            <strong>{{ dashboard.shippingOrders }}</strong>
+          </div>
+          <div class="panel metric-card">
+            <span>待处理工单</span>
+            <strong>{{ dashboard.pendingTickets }}</strong>
+          </div>
+          <div class="panel metric-card">
+            <span>商品数</span>
+            <strong>{{ dashboard.productCount }}</strong>
+          </div>
+          <div class="panel metric-card">
+            <span>可用知识文档</span>
+            <strong>{{ dashboard.readyDocuments }}</strong>
+          </div>
+        </div>
+        <div class="panel dashboard-panel">
+          <div class="toolbar">
+            <strong>运营提醒</strong>
+            <el-button :icon="Refresh" @click="loadDashboard">刷新</el-button>
+          </div>
+          <div class="notice-list">
+            <span>有 {{ dashboard.waitingShipmentOrders }} 个订单等待仓库发货。</span>
+            <span>有 {{ dashboard.pendingTickets }} 个工单还需要客服处理。</span>
+            <span v-if="dashboard.failedDocuments">有 {{ dashboard.failedDocuments }} 个知识库文档处理失败，请检查失败原因。</span>
+            <span v-else>知识库暂无失败文档。</span>
+          </div>
+        </div>
+      </el-tab-pane>
+
       <el-tab-pane label="文档管理">
         <div class="panel">
           <div class="toolbar">
@@ -147,10 +188,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, type UploadRequestOptions } from 'element-plus'
 import { Refresh, Search, UploadFilled } from '@element-plus/icons-vue'
 import { api, unwrap } from '../api'
+
+interface Dashboard {
+  todayConsultations: number
+  productCount: number
+  waitingShipmentOrders: number
+  shippingOrders: number
+  signedOrders: number
+  pendingTickets: number
+  readyDocuments: number
+  failedDocuments: number
+}
 
 interface DocumentRow {
   id: number
@@ -203,6 +255,16 @@ interface OrderRow {
   eventNote?: string
 }
 
+const dashboard = reactive<Dashboard>({
+  todayConsultations: 0,
+  productCount: 0,
+  waitingShipmentOrders: 0,
+  shippingOrders: 0,
+  signedOrders: 0,
+  pendingTickets: 0,
+  readyDocuments: 0,
+  failedDocuments: 0
+})
 const keyword = ref('')
 const productKeyword = ref('')
 const orderKeyword = ref('')
@@ -218,8 +280,13 @@ const productLoading = ref(false)
 const orderLoading = ref(false)
 
 onMounted(async () => {
-  await Promise.all([loadDocuments(), loadTickets(), loadProducts(), loadOrders()])
+  await Promise.all([loadDashboard(), loadDocuments(), loadTickets(), loadProducts(), loadOrders()])
 })
+
+async function loadDashboard() {
+  const data = await unwrap<Dashboard>(api.get('/admin/dashboard'))
+  Object.assign(dashboard, data)
+}
 
 async function loadDocuments() {
   documentLoading.value = true
@@ -237,7 +304,7 @@ async function uploadDocument(options: UploadRequestOptions) {
   try {
     await unwrap(api.post('/admin/documents', form, { headers: { 'Content-Type': 'multipart/form-data' } }))
     ElMessage.success('上传完成，后台正在处理')
-    await loadDocuments()
+    await Promise.all([loadDocuments(), loadDashboard()])
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '上传失败')
   }
@@ -249,12 +316,12 @@ function download(id: number) {
 
 async function retry(id: number) {
   await unwrap(api.post(`/admin/documents/${id}/retry`))
-  await loadDocuments()
+  await Promise.all([loadDocuments(), loadDashboard()])
 }
 
 async function remove(id: number) {
   await unwrap(api.delete(`/admin/documents/${id}`))
-  await loadDocuments()
+  await Promise.all([loadDocuments(), loadDashboard()])
 }
 
 async function loadProducts() {
@@ -290,7 +357,7 @@ async function updateOrder(row: OrderRow) {
     eventNote: row.eventNote
   }))
   ElMessage.success('订单状态已更新')
-  await loadOrders()
+  await Promise.all([loadOrders(), loadDashboard()])
 }
 
 async function loadTickets() {
@@ -314,7 +381,7 @@ async function updateTicket(row: TicketRow) {
     lockVersion: row.lockVersion
   }))
   ElMessage.success('工单已更新')
-  await loadTickets()
+  await Promise.all([loadTickets(), loadDashboard()])
 }
 
 function statusLabel(status: string) {
@@ -373,6 +440,37 @@ function formatDate(value?: string) {
 </script>
 
 <style scoped>
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.metric-card {
+  display: grid;
+  gap: 8px;
+}
+
+.metric-card span {
+  color: #75685f;
+}
+
+.metric-card strong {
+  font-size: 30px;
+  color: #c45656;
+}
+
+.dashboard-panel {
+  margin-top: 14px;
+}
+
+.notice-list {
+  display: grid;
+  gap: 10px;
+  color: #5f5048;
+}
+
 .ticket-action {
   display: grid;
   grid-template-columns: 120px minmax(120px, 1fr) auto;
@@ -392,8 +490,18 @@ function formatDate(value?: string) {
 }
 
 @media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .order-action,
   .ticket-action {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .dashboard-grid {
     grid-template-columns: 1fr;
   }
 }
