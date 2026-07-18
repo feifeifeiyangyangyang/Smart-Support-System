@@ -88,12 +88,13 @@ public class ChatApplicationService {
         }
 
         int topK = modelRuntimeConfigService.currentTopK();
+        double minRetrievalScore = modelRuntimeConfigService.currentMinRetrievalScore();
         List<KnowledgeChunk> chunks = mergeChunks(
                 keywordKnowledgeSearch.search(question, topK),
                 vectorStore.search(
                 embeddingClient.embed(question),
                 topK,
-                properties.getRag().getMinRetrievalScore()
+                minRetrievalScore
                 ),
                 topK
         );

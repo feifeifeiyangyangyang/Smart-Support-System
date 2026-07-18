@@ -25,6 +25,7 @@ public class ModelRuntimeConfigController {
 
     @PutMapping("/api/v1/admin/model-config")
     public ApiResponse<ModelRuntimeConfigResponse> update(@Valid @RequestBody UpdateModelRuntimeConfigRequest request) {
-        return ApiResponse.ok(configService.update(request.temperature(), request.topK(), request.mockEnabled()));
+        return ApiResponse.ok(configService.update(request.temperature(), request.topK(),
+                request.minRetrievalScore(), request.mockEnabled()));
     }
 }

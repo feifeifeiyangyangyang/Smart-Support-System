@@ -30,6 +30,7 @@ public class ModelRuntimeConfigService {
         defaults.setId(SINGLETON_ID);
         defaults.setTemperature(BigDecimal.valueOf(properties.getLlm().getTemperature()));
         defaults.setTopK(properties.getRag().getTopK());
+        defaults.setMinRetrievalScore(BigDecimal.valueOf(properties.getRag().getMinRetrievalScore()));
         defaults.setMockEnabled(properties.getLlm().isMockEnabled() || properties.getLlm().getApiKey() == null || properties.getLlm().getApiKey().isBlank());
         defaults.setUpdatedAt(LocalDateTime.now());
         return defaults;
@@ -43,6 +44,10 @@ public class ModelRuntimeConfigService {
         return current().getTemperature().doubleValue();
     }
 
+    public double currentMinRetrievalScore() {
+        return current().getMinRetrievalScore().doubleValue();
+    }
+
     public boolean isMockEnabled() {
         return Boolean.TRUE.equals(current().getMockEnabled());
     }
@@ -52,11 +57,12 @@ public class ModelRuntimeConfigService {
     }
 
     @Transactional
-    public ModelRuntimeConfigResponse update(BigDecimal temperature, Integer topK, Boolean mockEnabled) {
+    public ModelRuntimeConfigResponse update(BigDecimal temperature, Integer topK, BigDecimal minRetrievalScore, Boolean mockEnabled) {
         ModelRuntimeConfig config = new ModelRuntimeConfig();
         config.setId(SINGLETON_ID);
         config.setTemperature(temperature);
         config.setTopK(topK);
+        config.setMinRetrievalScore(minRetrievalScore);
         config.setMockEnabled(mockEnabled);
         config.setUpdatedAt(LocalDateTime.now());
         if (mapper.selectById(SINGLETON_ID) == null) {
@@ -69,6 +75,6 @@ public class ModelRuntimeConfigService {
 
     private ModelRuntimeConfigResponse toResponse(ModelRuntimeConfig config) {
         return new ModelRuntimeConfigResponse(config.getTemperature(), config.getTopK(),
-                config.getMockEnabled(), config.getUpdatedAt());
+                config.getMinRetrievalScore(), config.getMockEnabled(), config.getUpdatedAt());
     }
 }

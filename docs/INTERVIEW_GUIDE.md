@@ -22,7 +22,7 @@
 
 ## 1.3 模型参数面板有什么价值？
 
-回答：它让 RAG 参数不再完全写死在配置文件里。管理员可以在后台调整 temperature、topK 和 Mock ChatModel 开关。temperature 控制回答发散程度，topK 控制每次检索候选片段数量，Mock 开关用于无 API Key 的本地演示和自动化测试。最低相似度阈值目前仍保留在配置文件，后续再纳入运行时配置。
+回答：它让 RAG 参数不再完全写死在配置文件里。管理员可以在后台调整 temperature、topK、最低相似度阈值和 Mock ChatModel 开关。temperature 控制回答发散程度，topK 控制每次检索候选片段数量，最低相似度阈值控制低相关资料是否拒答，Mock 开关用于无 API Key 的本地演示和自动化测试。
 
 代码路径：`application/ModelRuntimeConfigService.java`、`controller/ModelRuntimeConfigController.java`
 

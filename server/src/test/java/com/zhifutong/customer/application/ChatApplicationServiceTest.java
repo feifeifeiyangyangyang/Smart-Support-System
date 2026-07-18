@@ -86,6 +86,7 @@ class ChatApplicationServiceTest {
         when(keywordKnowledgeSearch.search(any(), anyInt())).thenReturn(List.of());
         when(commerceService.answerBusinessQuestion(any(), anyString())).thenReturn(Optional.empty());
         when(modelRuntimeConfigService.currentTopK()).thenReturn(5);
+        when(modelRuntimeConfigService.currentMinRetrievalScore()).thenReturn(0.42);
     }
 
     @AfterEach
@@ -106,6 +107,7 @@ class ChatApplicationServiceTest {
         assertEquals(1, response.sources().size());
         verify(chatModelClient).answer(any(), any());
         verify(keywordKnowledgeSearch).search(any(), org.mockito.ArgumentMatchers.eq(5));
+        verify(vectorStore).search(any(), org.mockito.ArgumentMatchers.eq(5), org.mockito.ArgumentMatchers.eq(0.42));
     }
 
     @Test

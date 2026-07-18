@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 public record ModelRuntimeConfigResponse(
         BigDecimal temperature,
         Integer topK,
+        BigDecimal minRetrievalScore,
         Boolean mockEnabled,
         LocalDateTime updatedAt
 ) {

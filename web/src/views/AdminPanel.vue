@@ -62,6 +62,13 @@
             </div>
             <div class="config-item">
               <div>
+                <strong>最低相似度阈值</strong>
+                <p>控制低相关资料是否拒答。调高更保守，调低更容易回答但误答风险更高。</p>
+              </div>
+              <el-slider v-model="modelConfig.minRetrievalScore" :min="0" :max="1" :step="0.05" show-input />
+            </div>
+            <div class="config-item">
+              <div>
                 <strong>Mock ChatModel</strong>
                 <p>开启后不调用真实大模型，适合无 API Key、本地演示和自动化测试。</p>
               </div>
@@ -71,7 +78,7 @@
           <div class="toolbar config-actions">
             <el-button type="primary" :loading="modelConfigSaving" @click="saveModelConfig">保存参数</el-button>
             <el-button :icon="Refresh" @click="loadModelConfig">恢复当前配置</el-button>
-            <span class="muted">最低相似度阈值保留为后续扩展。</span>
+            <span class="muted">保存后会影响后续新的客服问答。</span>
           </div>
         </div>
       </el-tab-pane>
@@ -240,6 +247,7 @@ interface Dashboard {
 interface ModelConfig {
   temperature: number
   topK: number
+  minRetrievalScore: number
   mockEnabled: boolean
 }
 
@@ -307,6 +315,7 @@ const dashboard = reactive<Dashboard>({
 const modelConfig = reactive<ModelConfig>({
   temperature: 0.2,
   topK: 5,
+  minRetrievalScore: 0.35,
   mockEnabled: true
 })
 const keyword = ref('')
@@ -338,6 +347,7 @@ async function loadModelConfig() {
   Object.assign(modelConfig, {
     temperature: Number(data.temperature),
     topK: data.topK,
+    minRetrievalScore: Number(data.minRetrievalScore),
     mockEnabled: data.mockEnabled
   })
 }
@@ -349,6 +359,7 @@ async function saveModelConfig() {
     Object.assign(modelConfig, {
       temperature: Number(data.temperature),
       topK: data.topK,
+      minRetrievalScore: Number(data.minRetrievalScore),
       mockEnabled: data.mockEnabled
     })
     ElMessage.success('模型参数已保存')

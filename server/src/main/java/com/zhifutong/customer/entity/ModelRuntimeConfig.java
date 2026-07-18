@@ -9,6 +9,7 @@ public class ModelRuntimeConfig {
     private Long id;
     private BigDecimal temperature;
     private Integer topK;
+    private BigDecimal minRetrievalScore;
     private Boolean mockEnabled;
     private LocalDateTime updatedAt;
 
@@ -18,6 +19,8 @@ public class ModelRuntimeConfig {
     public void setTemperature(BigDecimal temperature) { this.temperature = temperature; }
     public Integer getTopK() { return topK; }
     public void setTopK(Integer topK) { this.topK = topK; }
+    public BigDecimal getMinRetrievalScore() { return minRetrievalScore; }
+    public void setMinRetrievalScore(BigDecimal minRetrievalScore) { this.minRetrievalScore = minRetrievalScore; }
     public Boolean getMockEnabled() { return mockEnabled; }
     public void setMockEnabled(Boolean mockEnabled) { this.mockEnabled = mockEnabled; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
