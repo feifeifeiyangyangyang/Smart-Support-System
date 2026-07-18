@@ -44,6 +44,7 @@ public class ChatApplicationService {
     private final ChatMessageSourceMapper messageSourceMapper;
     private final KbChunkMapper chunkMapper;
     private final CommerceApplicationService commerceService;
+    private final ModelRuntimeConfigService modelRuntimeConfigService;
 
     public ChatApplicationService(ConversationService conversationService, EmbeddingClient embeddingClient,
                                   QdrantVectorStore vectorStore, ChatModelClient chatModelClient,
@@ -51,7 +52,8 @@ public class ChatApplicationService {
                                   ConfidenceCalculator confidenceCalculator,
                                   AppProperties properties, ObjectMapper objectMapper,
                                   ChatMessageSourceMapper messageSourceMapper, KbChunkMapper chunkMapper,
-                                  CommerceApplicationService commerceService) {
+                                  CommerceApplicationService commerceService,
+                                  ModelRuntimeConfigService modelRuntimeConfigService) {
         this.conversationService = conversationService;
         this.embeddingClient = embeddingClient;
         this.vectorStore = vectorStore;
@@ -64,6 +66,7 @@ public class ChatApplicationService {
         this.messageSourceMapper = messageSourceMapper;
         this.chunkMapper = chunkMapper;
         this.commerceService = commerceService;
+        this.modelRuntimeConfigService = modelRuntimeConfigService;
     }
 
     @Transactional
@@ -84,14 +87,15 @@ public class ChatApplicationService {
             return response;
         }
 
+        int topK = modelRuntimeConfigService.currentTopK();
         List<KnowledgeChunk> chunks = mergeChunks(
-                keywordKnowledgeSearch.search(question, properties.getRag().getTopK()),
+                keywordKnowledgeSearch.search(question, topK),
                 vectorStore.search(
                 embeddingClient.embed(question),
-                properties.getRag().getTopK(),
+                topK,
                 properties.getRag().getMinRetrievalScore()
                 ),
-                properties.getRag().getTopK()
+                topK
         );
         if (chunks.isEmpty()) {
             ChatResponse response = refuse(actualConversationId,

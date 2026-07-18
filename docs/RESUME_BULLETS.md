@@ -13,6 +13,7 @@ Java 17、Spring Boot 3.3.5、Spring Security、MyBatis-Plus、MySQL、Redis、F
 - 基于 Spring Boot 模块化单体实现企业知识库客服系统，包含用户咨询、商品订单查询、物流跟踪、知识库管理、RAG 问答、引用溯源和人工工单处理。
 - 使用 Spring Security + JWT + Redis 实现登录认证、Refresh Token、退出黑名单和管理员接口权限控制。
 - 实现用户端模拟下单、订单列表、物流跟踪和管理端运营仪表盘，覆盖待发货、运输中、工单待处理等核心指标。
+- 实现管理端模型参数面板，支持运行时调整 temperature、topK 和 Mock ChatModel 开关。
 - 将文档上传改造为“上传事务 + 任务表 + 异步处理”流程，支持文档 SHA-256 去重、处理失败记录和任务恢复扫描。
 - 实现业务数据优先的客服链路，支持“最近订单”“第二个订单”“我买的杯子”等订单指代识别，发货/物流/商品问题优先查询业务表，未命中时再走 RAG。
 - 结合 MySQL 关键词检索与 Qdrant 向量检索构建 RAG 流程，低相关度时不调用大模型并引导转人工。
@@ -23,7 +24,7 @@ Java 17、Spring Boot 3.3.5、Spring Security、MyBatis-Plus、MySQL、Redis、F
 
 ## 3 分钟介绍
 
-项目采用 Spring Boot 模块化单体架构，避免为了展示技术栈而拆微服务。认证层使用 Spring Security、JWT 和 Redis，Access Token 负责接口访问，Refresh Token 通过 HttpOnly Cookie 轮换，退出时将 Access Token jti 写入 Redis 黑名单。业务层补充了商品、订单和物流轨迹表，聊天时先识别订单/物流问题并查询业务数据。知识库部分把原来的同步上传改为任务表模型，数据库只记录 PENDING 任务，解析、切片、Embedding 和 Qdrant 写入由异步处理器完成。RAG 部分保留低相关度拒答策略，回答成功后会把来源写入 `chat_message_source`，方便后续追溯。工单部分使用明确状态机和 lockVersion，避免管理员并发处理时互相覆盖。
+项目采用 Spring Boot 模块化单体架构，避免为了展示技术栈而拆微服务。认证层使用 Spring Security、JWT 和 Redis，Access Token 负责接口访问，Refresh Token 通过 HttpOnly Cookie 轮换，退出时将 Access Token jti 写入 Redis 黑名单。业务层补充了商品、订单和物流轨迹表，聊天时先识别订单/物流问题并查询业务数据。知识库部分把原来的同步上传改为任务表模型，数据库只记录 PENDING 任务，解析、切片、Embedding 和 Qdrant 写入由异步处理器完成。RAG 部分支持在管理端运行时调整 temperature、topK 和 Mock 模型开关，并保留低相关度拒答策略；回答成功后会把来源写入 `chat_message_source`，方便后续追溯。工单部分使用明确状态机和 lockVersion，避免管理员并发处理时互相覆盖。
 
 ## 可量化数据如何获得
 

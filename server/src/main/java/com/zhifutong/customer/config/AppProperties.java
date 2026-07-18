@@ -103,6 +103,7 @@ public class AppProperties {
         private String baseUrl;
         private String modelName;
         private boolean mockEnabled;
+        private double temperature = 0.2;
 
         public String getApiKey() { return apiKey; }
         public void setApiKey(String apiKey) { this.apiKey = apiKey; }
@@ -112,6 +113,8 @@ public class AppProperties {
         public void setModelName(String modelName) { this.modelName = modelName; }
         public boolean isMockEnabled() { return mockEnabled; }
         public void setMockEnabled(boolean mockEnabled) { this.mockEnabled = mockEnabled; }
+        public double getTemperature() { return temperature; }
+        public void setTemperature(double temperature) { this.temperature = temperature; }
     }
 
     public static class Auth {

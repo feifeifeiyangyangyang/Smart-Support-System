@@ -67,6 +67,8 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
       LLM_MODEL_NAME: ${LLM_MODEL_NAME:-deepseek-v4-flash}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
       DOCUMENT_STORAGE_PATH: /app/data/documents
       EMBEDDING_MODEL_PATH: /app/models/embedding/model.onnx
       EMBEDDING_TOKENIZER_PATH: /app/models/embedding/tokenizer.json

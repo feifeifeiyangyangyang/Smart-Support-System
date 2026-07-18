@@ -153,6 +153,7 @@ npm run dev
 - `ACCESS_TOKEN_TTL_MINUTES`：Access Token 有效期。
 - `REFRESH_TOKEN_TTL_DAYS`：Refresh Token 有效期。
 - `CHAT_RATE_LIMIT_PER_MINUTE`：单用户每分钟聊天次数限制。
+- `LLM_TEMPERATURE`：默认大模型温度，管理端模型参数保存后以数据库运行时配置为准。
 - `DEMO_ADMIN_USERNAME` / `DEMO_ADMIN_PASSWORD`：本地演示管理员账号。
 - `DEMO_CUSTOMER_USERNAME` / `DEMO_CUSTOMER_PASSWORD`：本地演示用户账号。
 - `LLM_API_KEY`：真实大模型 API Key，只能写入本地 `.env`。
@@ -175,6 +176,8 @@ docker compose -f deploy/docker-compose.yml config
 
 ## 当前功能边界
 
-已实现：JWT + Redis 认证、Refresh Token Cookie、退出黑名单、商品/订单/物流业务查询、用户端模拟下单、订单指代识别、管理端仪表盘、文档异步任务、kb_chunk 持久化、RAG 来源快照、聊天限流、工单状态机、乐观锁、操作日志、用户端和管理端页面。
+已实现：JWT + Redis 认证、Refresh Token Cookie、退出黑名单、商品/订单/物流业务查询、用户端模拟下单、订单指代识别、管理端仪表盘、模型参数面板、文档异步任务、kb_chunk 持久化、RAG 来源快照、聊天限流、工单状态机、乐观锁、操作日志、用户端和管理端页面。
+
+管理端模型参数面板支持调整 `temperature`、`topK` 和 Mock ChatModel 开关。最低相似度阈值暂时保留在配置文件中，后续可以继续纳入运行时配置。
 
 已补充 Docker healthcheck、Actuator health/readiness、Maven Wrapper。未完成：完整 Testcontainers 覆盖、WireMock 外部服务测试、生产级密钥管理。

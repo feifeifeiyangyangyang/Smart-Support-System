@@ -48,6 +48,7 @@ class ChatApplicationServiceTest {
     private ChatMessageSourceMapper messageSourceMapper;
     private KbChunkMapper chunkMapper;
     private CommerceApplicationService commerceService;
+    private ModelRuntimeConfigService modelRuntimeConfigService;
     private ChatApplicationService service;
 
     @BeforeEach
@@ -60,6 +61,7 @@ class ChatApplicationServiceTest {
         messageSourceMapper = mock(ChatMessageSourceMapper.class);
         chunkMapper = mock(KbChunkMapper.class);
         commerceService = mock(CommerceApplicationService.class);
+        modelRuntimeConfigService = mock(ModelRuntimeConfigService.class);
         var properties = TestPropertiesFactory.create();
         service = new ChatApplicationService(
                 conversationService,
@@ -73,7 +75,8 @@ class ChatApplicationServiceTest {
                 new ObjectMapper(),
                 messageSourceMapper,
                 chunkMapper,
-                commerceService
+                commerceService,
+                modelRuntimeConfigService
         );
         AuthContext.set(new AuthenticatedUser(1L, "user", "演示用户", UserRole.CUSTOMER, "test-token-id"));
         when(conversationService.create(anyString(), anyLong())).thenReturn(new ConversationResponse(1L, "C001", "匿名客服会话",
@@ -82,6 +85,7 @@ class ChatApplicationServiceTest {
         when(embeddingClient.embed(any())).thenReturn(new float[] {0.1f, 0.2f});
         when(keywordKnowledgeSearch.search(any(), anyInt())).thenReturn(List.of());
         when(commerceService.answerBusinessQuestion(any(), anyString())).thenReturn(Optional.empty());
+        when(modelRuntimeConfigService.currentTopK()).thenReturn(5);
     }
 
     @AfterEach
@@ -101,6 +105,7 @@ class ChatApplicationServiceTest {
         assertEquals(ConfidenceLevel.HIGH, response.confidenceLevel());
         assertEquals(1, response.sources().size());
         verify(chatModelClient).answer(any(), any());
+        verify(keywordKnowledgeSearch).search(any(), org.mockito.ArgumentMatchers.eq(5));
     }
 
     @Test

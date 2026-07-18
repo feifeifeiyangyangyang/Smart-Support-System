@@ -43,6 +43,39 @@
         </div>
       </el-tab-pane>
 
+      <el-tab-pane label="模型参数">
+        <div class="panel">
+          <div class="config-grid">
+            <div class="config-item">
+              <div>
+                <strong>Temperature</strong>
+                <p>控制回答发散程度。客服场景建议保持在 0.2 到 0.4。</p>
+              </div>
+              <el-slider v-model="modelConfig.temperature" :min="0" :max="1" :step="0.1" show-input />
+            </div>
+            <div class="config-item">
+              <div>
+                <strong>TopK</strong>
+                <p>每次从知识库取多少条候选片段。数值越大，资料越多但干扰也可能增加。</p>
+              </div>
+              <el-input-number v-model="modelConfig.topK" :min="1" :max="20" />
+            </div>
+            <div class="config-item">
+              <div>
+                <strong>Mock ChatModel</strong>
+                <p>开启后不调用真实大模型，适合无 API Key、本地演示和自动化测试。</p>
+              </div>
+              <el-switch v-model="modelConfig.mockEnabled" active-text="开启" inactive-text="关闭" />
+            </div>
+          </div>
+          <div class="toolbar config-actions">
+            <el-button type="primary" :loading="modelConfigSaving" @click="saveModelConfig">保存参数</el-button>
+            <el-button :icon="Refresh" @click="loadModelConfig">恢复当前配置</el-button>
+            <span class="muted">最低相似度阈值保留为后续扩展。</span>
+          </div>
+        </div>
+      </el-tab-pane>
+
       <el-tab-pane label="文档管理">
         <div class="panel">
           <div class="toolbar">
@@ -204,6 +237,12 @@ interface Dashboard {
   failedDocuments: number
 }
 
+interface ModelConfig {
+  temperature: number
+  topK: number
+  mockEnabled: boolean
+}
+
 interface DocumentRow {
   id: number
   originalName: string
@@ -265,6 +304,11 @@ const dashboard = reactive<Dashboard>({
   readyDocuments: 0,
   failedDocuments: 0
 })
+const modelConfig = reactive<ModelConfig>({
+  temperature: 0.2,
+  topK: 5,
+  mockEnabled: true
+})
 const keyword = ref('')
 const productKeyword = ref('')
 const orderKeyword = ref('')
@@ -278,14 +322,39 @@ const documentLoading = ref(false)
 const ticketLoading = ref(false)
 const productLoading = ref(false)
 const orderLoading = ref(false)
+const modelConfigSaving = ref(false)
 
 onMounted(async () => {
-  await Promise.all([loadDashboard(), loadDocuments(), loadTickets(), loadProducts(), loadOrders()])
+  await Promise.all([loadDashboard(), loadModelConfig(), loadDocuments(), loadTickets(), loadProducts(), loadOrders()])
 })
 
 async function loadDashboard() {
   const data = await unwrap<Dashboard>(api.get('/admin/dashboard'))
   Object.assign(dashboard, data)
+}
+
+async function loadModelConfig() {
+  const data = await unwrap<ModelConfig>(api.get('/admin/model-config'))
+  Object.assign(modelConfig, {
+    temperature: Number(data.temperature),
+    topK: data.topK,
+    mockEnabled: data.mockEnabled
+  })
+}
+
+async function saveModelConfig() {
+  modelConfigSaving.value = true
+  try {
+    const data = await unwrap<ModelConfig>(api.put('/admin/model-config', modelConfig))
+    Object.assign(modelConfig, {
+      temperature: Number(data.temperature),
+      topK: data.topK,
+      mockEnabled: data.mockEnabled
+    })
+    ElMessage.success('模型参数已保存')
+  } finally {
+    modelConfigSaving.value = false
+  }
 }
 
 async function loadDocuments() {
@@ -471,6 +540,30 @@ function formatDate(value?: string) {
   color: #5f5048;
 }
 
+.config-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.config-item {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(260px, 1fr);
+  gap: 20px;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #f0e5dc;
+}
+
+.config-item p {
+  margin: 6px 0 0;
+  color: #75685f;
+  line-height: 1.6;
+}
+
+.config-actions {
+  margin-top: 18px;
+}
+
 .ticket-action {
   display: grid;
   grid-template-columns: 120px minmax(120px, 1fr) auto;
@@ -495,7 +588,8 @@ function formatDate(value?: string) {
   }
 
   .order-action,
-  .ticket-action {
+  .ticket-action,
+  .config-item {
     grid-template-columns: 1fr;
   }
 }

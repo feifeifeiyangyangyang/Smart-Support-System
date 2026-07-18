@@ -2,6 +2,7 @@ package com.zhifutong.customer.client;
 
 import com.zhifutong.customer.config.AppProperties;
 import com.zhifutong.customer.exception.BusinessException;
+import java.util.function.DoubleSupplier;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
@@ -11,10 +12,16 @@ import org.springframework.web.reactive.function.client.WebClient;
 public class OpenAiCompatibleChatModelClient implements ChatModelClient {
     private final AppProperties properties;
     private final WebClient webClient;
+    private final DoubleSupplier temperatureSupplier;
 
     public OpenAiCompatibleChatModelClient(AppProperties properties, WebClient.Builder builder) {
+        this(properties, builder, () -> properties.getLlm().getTemperature());
+    }
+
+    public OpenAiCompatibleChatModelClient(AppProperties properties, WebClient.Builder builder, DoubleSupplier temperatureSupplier) {
         this.properties = properties;
         this.webClient = builder.baseUrl(properties.getLlm().getBaseUrl()).build();
+        this.temperatureSupplier = temperatureSupplier;
     }
 
     @Override
@@ -26,7 +33,7 @@ public class OpenAiCompatibleChatModelClient implements ChatModelClient {
         }
         Map<String, Object> body = Map.of(
                 "model", properties.getLlm().getModelName(),
-                "temperature", 0.2,
+                "temperature", temperatureSupplier.getAsDouble(),
                 "messages", List.of(
                         Map.of("role", "system", "content", systemPrompt),
                         Map.of("role", "user", "content", userPrompt)

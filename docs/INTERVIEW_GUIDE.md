@@ -20,6 +20,12 @@
 
 代码路径：`CommerceApplicationService.createOrder`、`CommerceApplicationService.dashboard`
 
+## 1.3 模型参数面板有什么价值？
+
+回答：它让 RAG 参数不再完全写死在配置文件里。管理员可以在后台调整 temperature、topK 和 Mock ChatModel 开关。temperature 控制回答发散程度，topK 控制每次检索候选片段数量，Mock 开关用于无 API Key 的本地演示和自动化测试。最低相似度阈值目前仍保留在配置文件，后续再纳入运行时配置。
+
+代码路径：`application/ModelRuntimeConfigService.java`、`controller/ModelRuntimeConfigController.java`
+
 ## 2. JWT 为什么还需要 Redis？
 
 回答：JWT 负责证明“用户是谁”，Redis 负责控制“这次登录现在是否还有效”。退出登录时可以删除 Refresh Token，并把 Access Token 的 jti 写入黑名单，实现立即失效。
