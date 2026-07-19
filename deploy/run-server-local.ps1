@@ -32,5 +32,9 @@ Resolve-ProjectPathEnv "DOCUMENT_STORAGE_PATH"
 Resolve-ProjectPathEnv "EMBEDDING_MODEL_PATH"
 Resolve-ProjectPathEnv "EMBEDDING_TOKENIZER_PATH"
 
+if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable("SERVER_PORT", "Process"))) {
+    [Environment]::SetEnvironmentVariable("SERVER_PORT", "18080", "Process")
+}
+
 Set-Location (Join-Path $root "server")
 .\mvnw.cmd spring-boot:run
