@@ -45,8 +45,7 @@ public class DemoCommerceDataInitializer implements ApplicationRunner {
                 .eq(UserAccount::getRole, UserRole.CUSTOMER)
                 .orderByAsc(UserAccount::getId)
                 .last("LIMIT 1"));
-        if (customer != null && orderMapper.selectCount(new LambdaQueryWrapper<CustomerOrder>()
-                .eq(CustomerOrder::getUserId, customer.getId())) == 0) {
+        if (customer != null) {
             createOrders(customer.getId());
         }
     }
@@ -88,28 +87,61 @@ public class DemoCommerceDataInitializer implements ApplicationRunner {
         CustomerOrder waiting = insertOrder("ORD202607170001", userId, h100.getId(), 1, h100.getPrice(),
                 OrderStatus.WAITING_SHIPMENT, now.minusHours(6), now.plusHours(30), null, null,
                 "张同学", "13800000001", "上海市浦东新区演示路 100 号", "等待仓库出库", now);
-        addShipment(waiting.getId(), null, null, ShipmentStatus.CREATED, "上海仓",
-                "订单已支付，等待仓库拣货", now.minusHours(6));
+        if (waiting != null) {
+            addShipment(waiting.getId(), null, null, ShipmentStatus.CREATED, "上海仓",
+                    "订单已支付，等待仓库拣货", now.minusHours(6));
+        }
 
         CustomerOrder transit = insertOrder("ORD202607160002", userId, c20.getId(), 2, c20.getPrice().multiply(BigDecimal.valueOf(2)),
                 OrderStatus.IN_TRANSIT, now.minusDays(1), now.minusHours(8), now.minusHours(5), null,
                 "张同学", "13800000001", "杭州市西湖区演示路 66 号", "包裹运输中", now.minusDays(1));
-        addShipment(transit.getId(), "顺丰速运", "SF1000002002", ShipmentStatus.PICKED_UP, "杭州转运中心",
-                "快递员已揽收", now.minusHours(5));
-        addShipment(transit.getId(), "顺丰速运", "SF1000002002", ShipmentStatus.IN_TRANSIT, "嘉兴中转场",
-                "包裹已到达嘉兴中转场，准备发往目的城市", now.minusHours(2));
+        if (transit != null) {
+            addShipment(transit.getId(), "顺丰速运", "SF1000002002", ShipmentStatus.PICKED_UP, "杭州转运中心",
+                    "快递员已揽收", now.minusHours(5));
+            addShipment(transit.getId(), "顺丰速运", "SF1000002002", ShipmentStatus.IN_TRANSIT, "嘉兴中转场",
+                    "包裹已到达嘉兴中转场，准备发往目的城市", now.minusHours(2));
+        }
 
         CustomerOrder signed = insertOrder("ORD202607140003", userId, p9.getId(), 1, p9.getPrice(),
                 OrderStatus.SIGNED, now.minusDays(3), now.minusDays(2), now.minusDays(2), now.minusDays(1),
                 "张同学", "13800000001", "苏州市工业园区演示路 8 号", "已签收订单", now.minusDays(3));
-        addShipment(signed.getId(), "京东物流", "JD1000003003", ShipmentStatus.DELIVERED, "苏州配送站",
-                "订单已签收，感谢您的购买", now.minusDays(1));
+        if (signed != null) {
+            addShipment(signed.getId(), "京东物流", "JD1000003003", ShipmentStatus.DELIVERED, "苏州配送站",
+                    "订单已签收，感谢您的购买", now.minusDays(1));
+        }
+
+        CustomerOrder shipped = insertOrder("ORD202607180004", userId, h100.getId(), 1, h100.getPrice(),
+                OrderStatus.SHIPPED, now.minusHours(18), now.minusHours(2), now.minusHours(1), null,
+                "张同学", "13800000001", "南京市玄武区演示路 18 号", "刚交给快递", now.minusHours(18));
+        if (shipped != null) {
+            addShipment(shipped.getId(), "中通快递", "ZT1000004004", ShipmentStatus.PICKED_UP, "上海仓",
+                    "包裹已交给中通快递，等待发往南京转运中心", now.minusHours(1));
+        }
+
+        CustomerOrder refunding = insertOrder("ORD202607130005", userId, c20.getId(), 3, c20.getPrice().multiply(BigDecimal.valueOf(3)),
+                OrderStatus.REFUNDING, now.minusDays(5), now.minusDays(4), now.minusDays(4), now.minusDays(2),
+                "张同学", "13800000001", "广州市天河区演示路 28 号", "用户反馈包装破损，售后审核中", now.minusDays(5));
+        if (refunding != null) {
+            addShipment(refunding.getId(), "圆通速递", "YT1000005005", ShipmentStatus.DELIVERED, "广州天河网点",
+                    "订单已签收，用户已提交售后申请", now.minusDays(2));
+        }
+
+        CustomerOrder cancelled = insertOrder("ORD202607120006", userId, p9.getId(), 1, p9.getPrice(),
+                OrderStatus.CANCELLED, now.minusDays(6), now.minusDays(5), null, null,
+                "张同学", "13800000001", "成都市高新区演示路 6 号", "用户取消未发货订单", now.minusDays(6));
+        if (cancelled != null) {
+            addShipment(cancelled.getId(), null, null, ShipmentStatus.CREATED, "系统",
+                    "订单已取消，未进入仓库发货流程", now.minusDays(5));
+        }
     }
 
     private CustomerOrder insertOrder(String orderNo, Long userId, Long productId, int quantity, BigDecimal amount,
                                       OrderStatus status, LocalDateTime paidAt, LocalDateTime expectedShipAt,
                                       LocalDateTime shippedAt, LocalDateTime signedAt, String receiverName,
                                       String receiverPhone, String receiverAddress, String remark, LocalDateTime createdAt) {
+        if (orderMapper.selectCount(new LambdaQueryWrapper<CustomerOrder>().eq(CustomerOrder::getOrderNo, orderNo)) > 0) {
+            return null;
+        }
         CustomerOrder order = new CustomerOrder();
         order.setOrderNo(orderNo);
         order.setUserId(userId);
