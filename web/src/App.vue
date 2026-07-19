@@ -1,28 +1,18 @@
 <template>
   <el-container class="shell">
     <el-aside
-      v-if="user && !isLoginRoute"
-      :width="effectiveAsideCollapsed ? '72px' : '224px'"
+      v-if="user && !isLoginRoute && !effectiveAsideHidden"
+      width="224px"
       class="aside"
-      :class="{ collapsed: effectiveAsideCollapsed }"
     >
       <div class="brand">
         <span class="brand-mark">智</span>
         <span class="brand-text">智服通</span>
       </div>
-      <el-button
-        class="aside-toggle"
-        text
-        :icon="effectiveAsideCollapsed ? Expand : Fold"
-        :aria-label="effectiveAsideCollapsed ? '展开侧边栏' : '收起侧边栏'"
-        @click="isAsideCollapsed = !isAsideCollapsed"
-      />
       <el-menu
         router
         :default-active="$route.path"
         class="menu"
-        :collapse="effectiveAsideCollapsed"
-        :collapse-transition="false"
       >
         <el-menu-item v-if="user.role === 'customer'" index="/chat">
           <el-icon><ChatDotRound /></el-icon>
@@ -38,8 +28,16 @@
         <span class="health-label">后端：{{ healthText }}</span>
       </div>
     </el-aside>
-    <el-main class="main" :class="{ centered: !user || isLoginRoute }">
+    <el-main class="main" :class="{ centered: !user || isLoginRoute, 'chat-main': isChatRoute }">
       <div v-if="user && !isLoginRoute" class="topbar">
+        <el-button
+          class="nav-toggle"
+          plain
+          :icon="effectiveAsideHidden ? Expand : Fold"
+          @click="isAsideHidden = !isAsideHidden"
+        >
+          {{ effectiveAsideHidden ? '展开导航' : '收起导航' }}
+        </el-button>
         <div class="topbar-actions">
           <div class="topbar-user">
             <strong>{{ user.name }}</strong>
@@ -65,10 +63,11 @@ const router = useRouter()
 const user = ref<SessionUser | null>(currentUser())
 const healthText = ref('检查中')
 const healthOk = ref(false)
-const isAsideCollapsed = ref(false)
+const isAsideHidden = ref(false)
 const isCompactViewport = ref(false)
 const isLoginRoute = computed(() => route.path === '/user/login' || route.path === '/admin/login')
-const effectiveAsideCollapsed = computed(() => isAsideCollapsed.value && !isCompactViewport.value)
+const isChatRoute = computed(() => route.path === '/chat')
+const effectiveAsideHidden = computed(() => isAsideHidden.value && !isCompactViewport.value)
 
 watch(() => route.fullPath, () => {
   user.value = currentUser()

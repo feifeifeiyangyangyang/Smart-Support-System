@@ -1,5 +1,5 @@
 <template>
-  <section>
+  <section class="chat-page">
     <div class="page-head">
       <div>
         <h1 class="page-title">客服咨询</h1>
@@ -46,50 +46,52 @@
       </div>
 
       <aside class="panel side">
-        <div class="side-title">可下单商品</div>
-        <div v-if="!products.length" class="empty-source">暂无商品。</div>
-        <div v-for="product in products" :key="product.id" class="product-item">
-          <div class="ticket-row">
-            <strong>{{ product.productName }}</strong>
-            <el-tag size="small" :type="product.saleStatus === 'ON_SALE' ? 'success' : 'info'">{{ productStatusLabel(product.saleStatus) }}</el-tag>
+        <div class="side-scroll">
+          <div class="side-title">可下单商品</div>
+          <div v-if="!products.length" class="empty-source">暂无商品。</div>
+          <div v-for="product in products" :key="product.id" class="product-item">
+            <div class="ticket-row">
+              <strong>{{ product.productName }}</strong>
+              <el-tag size="small" :type="product.saleStatus === 'ON_SALE' ? 'success' : 'info'">{{ productStatusLabel(product.saleStatus) }}</el-tag>
+            </div>
+            <p>¥{{ product.price }}，库存 {{ product.stockQuantity }}</p>
+            <small>{{ product.dispatchRule }}</small>
+            <el-button class="mini-action" size="small" type="primary" :icon="ShoppingCart" @click="openOrderDialog(product)">
+              模拟下单
+            </el-button>
           </div>
-          <p>¥{{ product.price }}，库存 {{ product.stockQuantity }}</p>
-          <small>{{ product.dispatchRule }}</small>
-          <el-button class="mini-action" size="small" type="primary" :icon="ShoppingCart" @click="openOrderDialog(product)">
-            模拟下单
-          </el-button>
-        </div>
 
-        <div class="side-title source-title">我的订单</div>
-        <div v-if="!orders.length" class="empty-source">暂无订单，可以先从上方模拟下单。</div>
-        <div v-for="order in orders" :key="order.id" class="order-item">
-          <div class="ticket-row">
-            <strong>{{ order.orderNo }}</strong>
-            <el-tag size="small" :type="orderStatusType(order.status)">{{ orderStatusLabel(order.status) }}</el-tag>
+          <div class="side-title source-title">我的订单</div>
+          <div v-if="!orders.length" class="empty-source">暂无订单，可以先从上方模拟下单。</div>
+          <div v-for="order in orders" :key="order.id" class="order-item">
+            <div class="ticket-row">
+              <strong>{{ order.orderNo }}</strong>
+              <el-tag size="small" :type="orderStatusType(order.status)">{{ orderStatusLabel(order.status) }}</el-tag>
+            </div>
+            <p>{{ order.product.productName }} × {{ order.quantity }}</p>
+            <small>预计发货：{{ formatDate(order.expectedShipAt) }}</small>
+            <small v-if="order.shipmentEvents.length">最新物流：{{ order.shipmentEvents[0].eventNote }}</small>
           </div>
-          <p>{{ order.product.productName }} × {{ order.quantity }}</p>
-          <small>预计发货：{{ formatDate(order.expectedShipAt) }}</small>
-          <small v-if="order.shipmentEvents.length">最新物流：{{ order.shipmentEvents[0].eventNote }}</small>
-        </div>
 
-        <div class="side-title source-title">引用资料</div>
-        <div v-if="!lastSources.length" class="empty-source">客服回答引用知识库时会显示来源。</div>
-        <div v-for="source in lastSources" :key="source.documentId + source.fileName" class="source-item">
-          <div class="source-name">{{ source.fileName }}</div>
-          <p>{{ source.snippet }}</p>
-        </div>
-        <div class="metric">置信等级：{{ confidenceLabel }}</div>
-        <div class="metric">建议人工：{{ needHuman ? '是' : '否' }}</div>
-
-        <div class="side-title ticket-title">我的工单</div>
-        <div v-if="!tickets.length" class="empty-source">暂无工单。需要人工处理时可以点击“转人工”。</div>
-        <div v-for="item in tickets" :key="item.id" class="ticket-item">
-          <div class="ticket-row">
-            <strong>{{ item.ticketNo }}</strong>
-            <el-tag size="small" :type="statusType(item.status)">{{ statusLabel(item.status) }}</el-tag>
+          <div class="side-title source-title">引用资料</div>
+          <div v-if="!lastSources.length" class="empty-source">客服回答引用知识库时会显示来源。</div>
+          <div v-for="source in lastSources" :key="source.documentId + source.fileName" class="source-item">
+            <div class="source-name">{{ source.fileName }}</div>
+            <p>{{ source.snippet }}</p>
           </div>
-          <p>{{ item.description }}</p>
-          <small v-if="item.handlingNote">处理备注：{{ item.handlingNote }}</small>
+          <div class="metric">置信等级：{{ confidenceLabel }}</div>
+          <div class="metric">建议人工：{{ needHuman ? '是' : '否' }}</div>
+
+          <div class="side-title ticket-title">我的工单</div>
+          <div v-if="!tickets.length" class="empty-source">暂无工单。需要人工处理时可以点击“转人工”。</div>
+          <div v-for="item in tickets" :key="item.id" class="ticket-item">
+            <div class="ticket-row">
+              <strong>{{ item.ticketNo }}</strong>
+              <el-tag size="small" :type="statusType(item.status)">{{ statusLabel(item.status) }}</el-tag>
+            </div>
+            <p>{{ item.description }}</p>
+            <small v-if="item.handlingNote">处理备注：{{ item.handlingNote }}</small>
+          </div>
         </div>
       </aside>
     </div>
@@ -397,12 +399,21 @@ function formatDate(value?: string) {
 </script>
 
 <style scoped>
+.chat-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .page-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
+  flex: 0 0 auto;
 }
 
 .page-head p {
@@ -414,10 +425,12 @@ function formatDate(value?: string) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 18px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .welcome {
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   color: #6b5f58;
 }
 
@@ -425,11 +438,19 @@ function formatDate(value?: string) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
+}
+
+.conversation {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .messages {
-  min-height: 390px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   border: 1px solid #efe8de;
   border-radius: 8px;
   padding: 14px;
@@ -476,11 +497,21 @@ function formatDate(value?: string) {
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 12px;
+  flex: 0 0 auto;
 }
 
 .side {
-  align-self: start;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.side-scroll {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px;
+  scrollbar-gutter: stable;
 }
 
 .side-title,
@@ -543,6 +574,21 @@ function formatDate(value?: string) {
 }
 
 @media (max-width: 640px) {
+  .chat-page {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .chat-layout {
+    display: grid;
+  }
+
+  .messages,
+  .side-scroll {
+    max-height: 560px;
+  }
+
   .page-head {
     display: grid;
   }

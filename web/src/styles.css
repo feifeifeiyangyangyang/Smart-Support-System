@@ -48,7 +48,6 @@ textarea {
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(16px);
-  transition: width 180ms ease;
 }
 
 .brand {
@@ -79,50 +78,19 @@ textarea {
   overflow: hidden;
 }
 
-.aside-toggle {
-  align-self: flex-end;
-  margin: -10px 12px 8px;
-  color: var(--muted);
-}
-
-.aside.collapsed .brand {
-  justify-content: center;
-  padding: 0 10px;
-}
-
-.aside.collapsed .brand-text,
-.aside.collapsed .health-label {
-  display: none;
-}
-
-.aside.collapsed .aside-toggle {
-  align-self: center;
-  margin: -10px 0 8px;
-}
-
 .menu {
   border-right: 0;
   background: transparent;
   margin-top: 6px;
 }
 
-.menu:not(.el-menu--collapse) {
-  width: 100%;
-}
-
-.menu.el-menu--collapse {
+.menu {
   width: 100%;
 }
 
 .menu .el-menu-item {
   margin: 4px 10px;
   border-radius: 8px;
-}
-
-.aside.collapsed .menu .el-menu-item {
-  justify-content: center;
-  margin: 4px 9px;
-  padding: 0 !important;
 }
 
 .menu .el-menu-item.is-active {
@@ -144,12 +112,6 @@ textarea {
   gap: 8px;
 }
 
-.aside.collapsed .health {
-  justify-content: center;
-  margin: auto 12px 16px;
-  padding: 10px;
-}
-
 .health-dot {
   width: 8px;
   height: 8px;
@@ -166,6 +128,17 @@ textarea {
   padding: 28px;
 }
 
+.main.chat-main {
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.main.chat-main .topbar {
+  flex: 0 0 auto;
+}
+
 .topbar {
   min-height: 50px;
   margin-bottom: 18px;
@@ -175,9 +148,13 @@ textarea {
   background: rgba(255, 255, 255, 0.88);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
   box-shadow: 0 8px 20px rgba(91, 69, 54, 0.06);
+}
+
+.nav-toggle {
+  flex: 0 0 auto;
 }
 
 .topbar-user {
@@ -335,7 +312,7 @@ textarea {
 }
 
 .el-button:not(.is-disabled):hover {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .el-table {
@@ -357,10 +334,6 @@ textarea {
 
   .brand {
     height: 56px;
-  }
-
-  .aside-toggle {
-    display: none;
   }
 
   .health {
