@@ -28,14 +28,6 @@
         <span class="health-label">后端：{{ healthText }}</span>
       </div>
     </el-aside>
-    <el-button
-      v-if="user && !isLoginRoute && effectiveAsideHidden"
-      class="edge-nav-toggle"
-      aria-label="展开导航"
-      plain
-      :icon="Expand"
-      @click="isAsideHidden = false"
-    />
     <el-main class="main" :class="{ centered: !user || isLoginRoute, 'chat-main': isChatRoute }">
       <div v-if="user && !isLoginRoute" class="topbar">
         <el-button
