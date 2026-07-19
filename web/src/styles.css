@@ -133,6 +133,7 @@ textarea {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding: 20px;
 }
 
 .main.chat-main .topbar {
@@ -155,6 +156,20 @@ textarea {
 
 .nav-toggle {
   flex: 0 0 auto;
+}
+
+.edge-nav-toggle {
+  position: fixed;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 36px;
+  min-width: 36px;
+  height: 44px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 20px rgba(91, 69, 54, 0.12);
 }
 
 .topbar-user {
@@ -308,7 +323,7 @@ textarea {
 }
 
 .el-button {
-  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+  transition: box-shadow 140ms ease, background-color 140ms ease;
 }
 
 .el-button:not(.is-disabled):hover {
@@ -339,6 +354,10 @@ textarea {
   .health {
     margin-left: 12px;
     margin-right: 12px;
+  }
+
+  .edge-nav-toggle {
+    display: none;
   }
 
   .menu {

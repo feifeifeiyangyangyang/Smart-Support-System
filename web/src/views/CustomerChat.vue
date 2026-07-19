@@ -10,23 +10,25 @@
 
     <div class="chat-layout">
       <div class="panel conversation">
-        <div class="welcome">您好，请直接描述问题。可以说“最近订单”“第二个订单”或带上商品名，我会先帮您查订单和物流。</div>
-        <div class="quick">
-          <el-button v-for="item in quickQuestions" :key="item" size="small" round @click="ask(item)">
-            {{ item }}
-          </el-button>
-        </div>
-
-        <div ref="messageListRef" class="messages" aria-live="polite">
-          <div v-if="!messages.length" class="empty-chat">
-            <strong>可以这样问：</strong>
-            <span>“我刚买的杯子什么时候发货？”</span>
-            <span>“第二个订单物流到哪了？”</span>
-            <span>“这个拆封后还能退吗？”</span>
+        <div ref="messageListRef" class="conversation-scroll" aria-live="polite">
+          <div class="welcome">您好，请直接描述问题。可以说“最近订单”“第二个订单”或带上商品名，我会先帮您查订单和物流。</div>
+          <div class="quick">
+            <el-button v-for="item in quickQuestions" :key="item" size="small" round @click="ask(item)">
+              {{ item }}
+            </el-button>
           </div>
-          <div v-for="message in messages" :key="message.id" class="message" :class="message.role.toLowerCase()">
-            <div class="role">{{ message.role === 'USER' ? '我' : '客服' }}</div>
-            <div class="bubble">{{ message.content }}</div>
+
+          <div class="messages">
+            <div v-if="!messages.length" class="empty-chat">
+              <strong>可以这样问：</strong>
+              <span>“我刚买的杯子什么时候发货？”</span>
+              <span>“第二个订单物流到哪了？”</span>
+              <span>“这个拆封后还能退吗？”</span>
+            </div>
+            <div v-for="message in messages" :key="message.id" class="message" :class="message.role.toLowerCase()">
+              <div class="role">{{ message.role === 'USER' ? '我' : '客服' }}</div>
+              <div class="bubble">{{ message.content }}</div>
+            </div>
           </div>
         </div>
 
@@ -423,8 +425,8 @@ function formatDate(value?: string) {
 
 .chat-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 12px;
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -447,7 +449,7 @@ function formatDate(value?: string) {
   min-height: 0;
 }
 
-.messages {
+.conversation-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -455,6 +457,10 @@ function formatDate(value?: string) {
   border-radius: 8px;
   padding: 14px;
   background: #fffaf5;
+}
+
+.messages {
+  min-height: 100%;
 }
 
 .empty-chat {
@@ -475,7 +481,7 @@ function formatDate(value?: string) {
 
 .bubble {
   display: inline-block;
-  max-width: min(78%, 720px);
+  max-width: min(84%, 820px);
   padding: 10px 12px;
   border-radius: 8px;
   background: #fff;
@@ -510,8 +516,12 @@ function formatDate(value?: string) {
 .side-scroll {
   height: 100%;
   overflow-y: auto;
-  padding: 20px;
-  scrollbar-gutter: stable;
+  overflow-x: clip;
+  padding: 18px;
+}
+
+.side-scroll * {
+  max-width: 100%;
 }
 
 .side-title,
@@ -559,6 +569,12 @@ function formatDate(value?: string) {
   gap: 8px;
   align-items: center;
   margin-bottom: 6px;
+  min-width: 0;
+}
+
+.ticket-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ticket-item small,
