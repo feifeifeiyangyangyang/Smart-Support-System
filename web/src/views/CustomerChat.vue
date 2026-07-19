@@ -49,51 +49,100 @@
 
       <aside class="panel side">
         <div class="side-scroll">
-          <div class="side-title">可下单商品</div>
-          <div v-if="!products.length" class="empty-source">暂无商品。</div>
-          <div v-for="product in products" :key="product.id" class="product-item">
-            <div class="ticket-row">
-              <strong>{{ product.productName }}</strong>
-              <el-tag size="small" :type="product.saleStatus === 'ON_SALE' ? 'success' : 'info'">{{ productStatusLabel(product.saleStatus) }}</el-tag>
-            </div>
-            <p>¥{{ product.price }}，库存 {{ product.stockQuantity }}</p>
-            <small>{{ product.dispatchRule }}</small>
-            <el-button class="mini-action" size="small" type="primary" :icon="ShoppingCart" @click="openOrderDialog(product)">
-              模拟下单
-            </el-button>
+          <div class="side-switch" role="tablist" aria-label="右侧业务面板">
+            <button
+              class="switch-button"
+              :class="{ active: sideTab === 'products' }"
+              type="button"
+              role="tab"
+              :aria-selected="sideTab === 'products'"
+              @click="sideTab = 'products'"
+            >
+              下单商品
+              <span>{{ products.length }}</span>
+            </button>
+            <button
+              class="switch-button"
+              :class="{ active: sideTab === 'orders' }"
+              type="button"
+              role="tab"
+              :aria-selected="sideTab === 'orders'"
+              @click="sideTab = 'orders'"
+            >
+              已下单
+              <span>{{ orders.length }}</span>
+            </button>
           </div>
 
-          <div class="side-title source-title">我的订单</div>
-          <div v-if="!orders.length" class="empty-source">暂无订单，可以先从上方模拟下单。</div>
-          <div v-for="order in orders" :key="order.id" class="order-item">
-            <div class="ticket-row">
-              <strong>{{ order.orderNo }}</strong>
-              <el-tag size="small" :type="orderStatusType(order.status)">{{ orderStatusLabel(order.status) }}</el-tag>
+          <template v-if="sideTab === 'products'">
+            <div class="side-section-head">
+              <div>
+                <div class="side-title">可下单商品</div>
+                <p>选择商品后可模拟创建订单。</p>
+              </div>
+              <el-button size="small" plain @click="loadProducts">刷新</el-button>
             </div>
-            <p>{{ order.product.productName }} × {{ order.quantity }}</p>
-            <small>预计发货：{{ formatDate(order.expectedShipAt) }}</small>
-            <small v-if="order.shipmentEvents.length">最新物流：{{ order.shipmentEvents[0].eventNote }}</small>
-          </div>
-
-          <div class="side-title source-title">引用资料</div>
-          <div v-if="!lastSources.length" class="empty-source">客服回答引用知识库时会显示来源。</div>
-          <div v-for="source in lastSources" :key="source.documentId + source.fileName" class="source-item">
-            <div class="source-name">{{ source.fileName }}</div>
-            <p>{{ source.snippet }}</p>
-          </div>
-          <div class="metric">置信等级：{{ confidenceLabel }}</div>
-          <div class="metric">建议人工：{{ needHuman ? '是' : '否' }}</div>
-
-          <div class="side-title ticket-title">我的工单</div>
-          <div v-if="!tickets.length" class="empty-source">暂无工单。需要人工处理时可以点击“转人工”。</div>
-          <div v-for="item in tickets" :key="item.id" class="ticket-item">
-            <div class="ticket-row">
-              <strong>{{ item.ticketNo }}</strong>
-              <el-tag size="small" :type="statusType(item.status)">{{ statusLabel(item.status) }}</el-tag>
+            <div v-if="!products.length" class="empty-source">暂无商品。</div>
+            <div v-for="product in products" :key="product.id" class="product-item business-card">
+              <div class="ticket-row">
+                <strong>{{ product.productName }}</strong>
+                <el-tag size="small" :type="product.saleStatus === 'ON_SALE' ? 'success' : 'info'">{{ productStatusLabel(product.saleStatus) }}</el-tag>
+              </div>
+              <p>¥{{ product.price }}，库存 {{ product.stockQuantity }}</p>
+              <small>{{ product.dispatchRule }}</small>
+              <el-button class="mini-action" size="small" type="primary" :icon="ShoppingCart" @click="openOrderDialog(product)">
+                模拟下单
+              </el-button>
             </div>
-            <p>{{ item.description }}</p>
-            <small v-if="item.handlingNote">处理备注：{{ item.handlingNote }}</small>
-          </div>
+          </template>
+
+          <template v-else>
+            <div class="side-section-head">
+              <div>
+                <div class="side-title">已下单商品</div>
+                <p>{{ orderSummary }}</p>
+              </div>
+              <el-button size="small" plain @click="loadOrders">刷新</el-button>
+            </div>
+            <div class="order-tools">
+              <el-button size="small" plain @click="ask('查询我已经下单的商品')">问客服列出</el-button>
+              <el-button size="small" plain @click="ask('最近订单物流到哪里了')">查最近物流</el-button>
+            </div>
+            <div v-if="!orders.length" class="empty-source">暂无订单，可以切到“下单商品”先模拟下单。</div>
+            <div v-for="(order, index) in orders" :key="order.id" class="order-item business-card">
+              <div class="ticket-row">
+                <strong>{{ index + 1 }}. {{ order.product.productName }}</strong>
+                <el-tag size="small" :type="orderStatusType(order.status)">{{ orderStatusLabel(order.status) }}</el-tag>
+              </div>
+              <p>{{ order.orderNo }}</p>
+              <small>数量：{{ order.quantity }}，预计发货：{{ formatDate(order.expectedShipAt) }}</small>
+              <small v-if="order.shipmentEvents.length">最新物流：{{ order.shipmentEvents[0].eventNote }}</small>
+              <div class="order-actions">
+                <el-button size="small" type="primary" plain @click="ask(`${order.product.productName} 物流到哪里了`)">查物流</el-button>
+                <el-button size="small" plain @click="ask(`订单 ${order.orderNo} 能不能退货`)">问售后</el-button>
+              </div>
+            </div>
+
+            <div class="side-title source-title">引用资料</div>
+            <div v-if="!lastSources.length" class="empty-source">客服回答引用知识库时会显示来源。</div>
+            <div v-for="source in lastSources" :key="source.documentId + source.fileName" class="source-item">
+              <div class="source-name">{{ source.fileName }}</div>
+              <p>{{ source.snippet }}</p>
+            </div>
+            <div class="metric">置信等级：{{ confidenceLabel }}</div>
+            <div class="metric">建议人工：{{ needHuman ? '是' : '否' }}</div>
+
+            <div class="side-title ticket-title">我的工单</div>
+            <div v-if="!tickets.length" class="empty-source">暂无工单。需要人工处理时可以点击“转人工”。</div>
+            <div v-for="item in tickets" :key="item.id" class="ticket-item">
+              <div class="ticket-row">
+                <strong>{{ item.ticketNo }}</strong>
+                <el-tag size="small" :type="statusType(item.status)">{{ statusLabel(item.status) }}</el-tag>
+              </div>
+              <p>{{ item.description }}</p>
+              <small v-if="item.handlingNote">处理备注：{{ item.handlingNote }}</small>
+            </div>
+          </template>
         </div>
       </aside>
     </div>
@@ -220,6 +269,7 @@ const messages = ref<MessageRow[]>([])
 const tickets = ref<TicketRow[]>([])
 const products = ref<ProductRow[]>([])
 const orders = ref<OrderRow[]>([])
+const sideTab = ref<'products' | 'orders'>('products')
 const lastSources = ref<SourceReference[]>([])
 const confidenceLevel = ref('')
 const needHuman = ref(false)
@@ -244,6 +294,13 @@ const confidenceLabel = computed(() => {
   if (confidenceLevel.value === 'MEDIUM') return '中'
   if (confidenceLevel.value === 'LOW') return '低'
   return '暂无'
+})
+
+const orderSummary = computed(() => {
+  if (!orders.value.length) return '还没有已下单商品。'
+  const waiting = orders.value.filter((order) => order.status === 'WAITING_SHIPMENT' || order.status === 'PAID').length
+  const shipping = orders.value.filter((order) => order.status === 'SHIPPED' || order.status === 'IN_TRANSIT').length
+  return `${orders.value.length} 个订单，${waiting} 个待发货，${shipping} 个配送中。`
 })
 
 onMounted(async () => {
@@ -311,6 +368,7 @@ async function createOrder() {
     ElMessage.success('订单已创建，可以直接询问发货和物流')
     orderVisible.value = false
     await Promise.all([loadOrders(), loadProducts()])
+    sideTab.value = 'orders'
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '下单失败')
   } finally {
@@ -341,12 +399,12 @@ async function loadTickets() {
 }
 
 async function loadOrders() {
-  const data = await unwrap<{ records: OrderRow[] }>(api.get('/orders'))
+  const data = await unwrap<{ records: OrderRow[] }>(api.get('/orders', { params: { page: 1, size: 50 } }))
   orders.value = data.records
 }
 
 async function loadProducts() {
-  const data = await unwrap<{ records: ProductRow[] }>(api.get('/products'))
+  const data = await unwrap<{ records: ProductRow[] }>(api.get('/products', { params: { page: 1, size: 50 } }))
   products.value = data.records
 }
 
@@ -524,6 +582,73 @@ function formatDate(value?: string) {
   max-width: 100%;
 }
 
+.side-switch {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: -18px -18px 14px;
+  padding: 12px;
+  background: rgba(255, 250, 245, 0.96);
+  border-bottom: 1px solid #f0e5dc;
+  backdrop-filter: blur(10px);
+}
+
+.switch-button {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 9px 8px;
+  background: transparent;
+  color: #75685f;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.switch-button span {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1e6dc;
+  color: #8a7669;
+  font-size: 12px;
+}
+
+.switch-button.active {
+  background: #ff6b6b;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(255, 107, 107, 0.22);
+}
+
+.switch-button.active span {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.side-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.side-section-head p {
+  margin: 3px 0 0;
+  color: #8b7d72;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .side-title,
 .metric {
   margin-bottom: 10px;
@@ -547,6 +672,14 @@ function formatDate(value?: string) {
 .product-item {
   padding: 12px 0;
   border-bottom: 1px solid #f0e5dc;
+}
+
+.business-card {
+  padding: 12px;
+  border: 1px solid #f0e5dc;
+  border-radius: 8px;
+  background: #fffdfb;
+  margin-bottom: 10px;
 }
 
 .source-name {
@@ -587,6 +720,20 @@ function formatDate(value?: string) {
 
 .mini-action {
   margin-top: 8px;
+}
+
+.order-tools {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.order-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 @media (max-width: 640px) {

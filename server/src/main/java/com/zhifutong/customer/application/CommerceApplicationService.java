@@ -279,7 +279,8 @@ public class CommerceApplicationService {
 
     private boolean looksLikeOrderListQuestion(String question) {
         if (containsAny(question, "所有商品", "全部商品", "所有订单", "全部订单", "订单列表", "买的所有商品",
-                "买过哪些", "买了哪些", "我买了什么", "我买过什么", "哪些商品", "分别是哪个", "分别是什么")) {
+                "已经下单", "已下单", "下过单", "下单的商品", "买过哪些", "买了哪些", "我买了什么", "我买过什么",
+                "哪些商品", "分别是哪个", "分别是什么")) {
             return true;
         }
         return requestedOrderIndex(question) >= 0 && containsAny(question, "分别", "哪些", "是什么", "是哪个");
@@ -363,7 +364,8 @@ public class CommerceApplicationService {
         }
         List<Integer> indexes = requestedOrderIndexes(question);
         boolean askAll = containsAny(question, "所有商品", "全部商品", "所有订单", "全部订单", "订单列表", "买的所有商品",
-                "买过哪些", "买了哪些", "我买了什么", "我买过什么", "哪些商品");
+                "已经下单", "已下单", "下过单", "下单的商品", "买过哪些", "买了哪些", "我买了什么", "我买过什么",
+                "哪些商品");
         StringBuilder builder;
         if (!askAll && !indexes.isEmpty()) {
             builder = new StringBuilder("按页面“我的订单”从上到下看，您问的这几个位置对应：");
