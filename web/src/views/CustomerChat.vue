@@ -624,14 +624,15 @@ function formatDate(value?: string) {
 }
 
 .switch-button.active {
-  background: #ff6b6b;
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(255, 107, 107, 0.22);
+  border-color: #efcfc2;
+  background: #fff7f1;
+  color: #5c463b;
+  box-shadow: inset 0 -2px 0 #d9825f;
 }
 
 .switch-button.active span {
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
+  background: #f4ded4;
+  color: #7a4d3d;
 }
 
 .side-section-head {
