@@ -61,27 +61,10 @@ textarea {
   letter-spacing: 0;
 }
 
-.user-card {
-  margin: 0 16px 16px;
-  padding: 13px 14px;
-  border: 1px solid #f3ded5;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #fff8f3 0%, #fff 100%);
-  display: grid;
-  gap: 3px;
-}
-
-.user-name {
-  font-weight: 700;
-}
-
-.user-card small {
-  color: var(--muted);
-}
-
 .menu {
   border-right: 0;
   background: transparent;
+  margin-top: 6px;
 }
 
 .menu .el-menu-item {
@@ -96,7 +79,7 @@ textarea {
 }
 
 .health {
-  margin: auto 16px 8px;
+  margin: auto 16px 16px;
   padding: 10px 12px;
   border-radius: 8px;
   background: #fff5e9;
@@ -119,27 +102,22 @@ textarea {
   color: #2f7d32;
 }
 
-.logout {
-  margin: 0 16px 16px;
-  justify-content: flex-start;
-}
-
 .main {
   padding: 28px;
 }
 
 .topbar {
-  min-height: 52px;
+  min-height: 50px;
   margin-bottom: 18px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.88);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-  box-shadow: 0 8px 22px rgba(91, 69, 54, 0.08);
+  box-shadow: 0 8px 20px rgba(91, 69, 54, 0.06);
 }
 
 .topbar-user {
@@ -147,11 +125,19 @@ textarea {
   gap: 2px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .topbar-user strong {
+  text-align: right;
   font-size: 15px;
 }
 
 .topbar-user span {
+  text-align: right;
   color: var(--muted);
   font-size: 13px;
 }
@@ -313,9 +299,7 @@ textarea {
     height: 56px;
   }
 
-  .user-card,
-  .health,
-  .logout {
+  .health {
     margin-left: 12px;
     margin-right: 12px;
   }
@@ -331,6 +315,13 @@ textarea {
 
   .topbar {
     margin-bottom: 14px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .chat-layout {
@@ -354,6 +345,11 @@ textarea {
 
   .login-panel {
     padding: 22px;
+  }
+
+  .topbar-user strong,
+  .topbar-user span {
+    text-align: left;
   }
 }
 

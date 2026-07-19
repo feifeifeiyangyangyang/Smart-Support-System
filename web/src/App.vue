@@ -2,10 +2,6 @@
   <el-container class="shell">
     <el-aside v-if="user && !isLoginRoute" width="224px" class="aside">
       <div class="brand">智服通</div>
-      <div class="user-card">
-        <span class="user-name">{{ user.name }}</span>
-        <small>{{ user.role === 'admin' ? '管理端' : '用户端' }}</small>
-      </div>
       <el-menu router :default-active="$route.path" class="menu">
         <el-menu-item v-if="user.role === 'customer'" index="/chat">客服咨询</el-menu-item>
         <el-menu-item v-if="user.role === 'admin'" index="/admin">管理后台</el-menu-item>
@@ -14,15 +10,16 @@
         <span class="health-dot" aria-hidden="true"></span>
         后端：{{ healthText }}
       </div>
-      <el-button class="logout" text aria-label="退出登录" @click="handleLogout">退出登录</el-button>
     </el-aside>
     <el-main class="main" :class="{ centered: !user || isLoginRoute }">
       <div v-if="user && !isLoginRoute" class="topbar">
-        <div class="topbar-user">
-          <strong>{{ user.name }}</strong>
-          <span>{{ user.role === 'admin' ? '管理端' : '用户端' }}</span>
+        <div class="topbar-actions">
+          <div class="topbar-user">
+            <strong>{{ user.name }}</strong>
+            <span>{{ user.role === 'admin' ? '管理员账号' : '用户账号' }}</span>
+          </div>
+          <el-button type="danger" plain :icon="SwitchButton" @click="handleLogout">退出登录</el-button>
         </div>
-        <el-button type="danger" plain :icon="SwitchButton" @click="handleLogout">退出登录</el-button>
       </div>
       <router-view />
     </el-main>
