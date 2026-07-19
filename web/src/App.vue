@@ -17,6 +17,13 @@
       <el-button class="logout" text aria-label="退出登录" @click="handleLogout">退出登录</el-button>
     </el-aside>
     <el-main class="main" :class="{ centered: !user || isLoginRoute }">
+      <div v-if="user && !isLoginRoute" class="topbar">
+        <div class="topbar-user">
+          <strong>{{ user.name }}</strong>
+          <span>{{ user.role === 'admin' ? '管理端' : '用户端' }}</span>
+        </div>
+        <el-button type="danger" plain :icon="SwitchButton" @click="handleLogout">退出登录</el-button>
+      </div>
       <router-view />
     </el-main>
   </el-container>
@@ -25,6 +32,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { SwitchButton } from '@element-plus/icons-vue'
 import { api, unwrap } from './api'
 import { currentUser, logout, type SessionUser } from './auth'
 
