@@ -198,6 +198,7 @@ public class CommerceApplicationService {
             return Optional.empty();
         }
         String clean = question.trim();
+        boolean orderRelated = looksLikeOrderQuestion(clean) || looksLikeAfterSaleQuestion(clean);
         if (looksLikeOrderListQuestion(clean)) {
             return Optional.of(answerForOrderList(user, clean));
         }
@@ -205,10 +206,16 @@ public class CommerceApplicationService {
         if (matchedOrder.isEmpty()) {
             matchedOrder = findOrderByIndex(user, clean);
         }
-        if (matchedOrder.isEmpty() && (looksLikeOrderQuestion(clean) || looksLikeAfterSaleQuestion(clean))) {
-            matchedOrder = findOrderByProductMention(user, clean);
+        if (matchedOrder.isEmpty() && orderRelated) {
+            ProductCatalog product = findMentionedProduct(clean);
+            if (product != null) {
+                List<CustomerOrder> productOrders = findOrdersByProduct(user, product);
+                if (!productOrders.isEmpty()) {
+                    return Optional.of(answerForProductOrders(product, productOrders, clean));
+                }
+            }
         }
-        if (matchedOrder.isEmpty() && (looksLikeOrderQuestion(clean) || looksLikeAfterSaleQuestion(clean))) {
+        if (matchedOrder.isEmpty() && orderRelated) {
             matchedOrder = latestOrder(user);
         }
         if (matchedOrder.isPresent()) {
@@ -249,19 +256,6 @@ public class CommerceApplicationService {
         }
         List<CustomerOrder> orders = userOrders(user);
         return index < orders.size() ? Optional.of(orders.get(index)) : Optional.empty();
-    }
-
-    private Optional<CustomerOrder> findOrderByProductMention(AuthenticatedUser user, String question) {
-        ProductCatalog product = findMentionedProduct(question);
-        if (product == null) {
-            return Optional.empty();
-        }
-        CustomerOrder order = orderMapper.selectOne(new LambdaQueryWrapper<CustomerOrder>()
-                .eq(CustomerOrder::getUserId, user.userId())
-                .eq(CustomerOrder::getProductId, product.getId())
-                .orderByDesc(CustomerOrder::getCreatedAt)
-                .last("LIMIT 1"));
-        return Optional.ofNullable(order);
     }
 
     private boolean looksLikeOrderQuestion(String question) {
@@ -357,6 +351,13 @@ public class CommerceApplicationService {
                 .orderByDesc(CustomerOrder::getCreatedAt));
     }
 
+    private List<CustomerOrder> findOrdersByProduct(AuthenticatedUser user, ProductCatalog product) {
+        return orderMapper.selectList(new LambdaQueryWrapper<CustomerOrder>()
+                .eq(CustomerOrder::getUserId, user.userId())
+                .eq(CustomerOrder::getProductId, product.getId())
+                .orderByDesc(CustomerOrder::getCreatedAt));
+    }
+
     private String answerForOrderList(AuthenticatedUser user, String question) {
         List<CustomerOrder> orders = userOrders(user);
         if (orders.isEmpty()) {
@@ -406,35 +407,97 @@ public class CommerceApplicationService {
         builder.append("。");
     }
 
+    private String answerForProductOrders(ProductCatalog product, List<CustomerOrder> orders, String question) {
+        CustomerOrder latest = orders.get(0);
+        if (orders.size() == 1) {
+            return answerForOrder(latest, question);
+        }
+        long waiting = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.WAITING_SHIPMENT)
+                .count();
+        long shipping = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.SHIPPED || order.getStatus() == OrderStatus.IN_TRANSIT)
+                .count();
+        return "我查到您有 " + orders.size() + " 笔「" + product.getProductName() + "」相关订单"
+                + orderCountSummary(waiting, shipping)
+                + "，先按最近一笔看。\n"
+                + answerForOrder(latest, question)
+                + "\n如果您想查更早的一笔，可以直接问“第几个订单物流到哪里了”，或者报订单号。";
+    }
+
+    private String orderCountSummary(long waiting, long shipping) {
+        if (waiting == 0 && shipping == 0) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder("，其中");
+        if (waiting > 0) {
+            builder.append(" ").append(waiting).append(" 笔待发货");
+        }
+        if (shipping > 0) {
+            if (waiting > 0) {
+                builder.append("、");
+            } else {
+                builder.append(" ");
+            }
+            builder.append(shipping).append(" 笔配送中");
+        }
+        return builder.toString();
+    }
+
     private String answerForOrder(CustomerOrder order, String question) {
         ProductCatalog product = productMapper.selectById(order.getProductId());
         ShipmentEvent latest = latestShipmentEvent(order.getId());
         String productName = product == null ? "商品" : product.getProductName();
+        String lead = orderAnswerLead(order, productName, question);
         if (looksLikeAfterSaleQuestion(question)) {
             String rule = product == null ? "具体规则需要人工客服结合商品情况核实。" : product.getAfterSaleRule();
-            return "我查到您这单是 " + order.getOrderNo() + "，商品为「" + productName + "」，当前订单状态是"
+            return lead + "当前订单状态是"
                     + orderStatusLabel(order.getStatus()) + "。售后规则：" + rule
                     + " 如果已经拆封、使用、配件缺失或商品破损，建议直接转人工并补充照片/视频凭证。";
         }
         if (order.getStatus() == OrderStatus.WAITING_SHIPMENT || order.getStatus() == OrderStatus.PAID) {
-            return "我查到您的订单 " + order.getOrderNo() + " 是「" + productName + "」，当前还未发货。预计发货时间是 "
-                    + format(order.getExpectedShipAt()) + "。如果超过这个时间还没有物流更新，可以直接转人工帮您催一下仓库。";
+            return lead + pendingShipmentText(question, order);
         }
         if (order.getStatus() == OrderStatus.SHIPPED || order.getStatus() == OrderStatus.IN_TRANSIT) {
             String latestText = latest == null ? "暂时没有新的物流节点" : latest.getEventNote() + "（" + format(latest.getEventTime()) + "）";
-            return "我查到您的订单 " + order.getOrderNo() + " 已发货，物流单号是 "
+            return lead + "这单已发货，物流单号是 "
                     + valueOrDefault(latest == null ? null : latest.getTrackingNo(), "暂未同步") + "。最新进展：" + latestText + "。";
         }
         if (order.getStatus() == OrderStatus.SIGNED) {
-            return "我查到您的订单 " + order.getOrderNo() + " 已在 " + format(order.getSignedAt())
+            return lead + "这单已在 " + format(order.getSignedAt())
                     + " 签收。如果商品有破损、缺件或质量问题，可以继续描述情况，我帮您转到售后工单。";
         }
         if (order.getStatus() == OrderStatus.REFUNDING || order.getStatus() == OrderStatus.REFUNDED) {
-            return "我查到您的订单 " + order.getOrderNo() + " 当前处于" + orderStatusLabel(order.getStatus())
+            return lead + "这单当前处于" + orderStatusLabel(order.getStatus())
                     + "状态，退款/售后进度建议在工单里继续跟进，避免遗漏凭证。";
         }
-        return "我查到您的订单 " + order.getOrderNo() + " 当前状态是 " + orderStatusLabel(order.getStatus())
-                + "，商品是「" + productName + "」。如果需要更具体处理，可以转人工继续核实。";
+        return lead + "当前状态是 " + orderStatusLabel(order.getStatus())
+                + "。如果需要更具体处理，可以转人工继续核实。";
+    }
+
+    private String orderAnswerLead(CustomerOrder order, String productName, String question) {
+        int index = requestedOrderIndex(question);
+        if (index >= 0) {
+            return "按页面“我的订单”从上到下，" + orderPositionLabel(index) + "是「" + productName
+                    + "」（订单 " + order.getOrderNo() + "）。";
+        }
+        if (containsAny(question, "最近", "刚买", "刚下单")) {
+            return "我先按最近一笔订单看：您这单是「" + productName + "」（订单 " + order.getOrderNo() + "）。";
+        }
+        return "我查到您的订单 " + order.getOrderNo() + " 是「" + productName + "」。";
+    }
+
+    private String pendingShipmentText(String question, CustomerOrder order) {
+        if (containsAny(question, "物流", "快递", "到哪", "到哪里")) {
+            return "这单还没有进入物流运输，预计发货时间是 " + format(order.getExpectedShipAt())
+                    + "。超过这个时间还没更新的话，可以转人工帮您催仓库。";
+        }
+        if (containsAny(question, "什么时候到", "多久到", "到货")) {
+            return "这单目前还未发货，所以暂时不能给到准确到达时间；预计发货时间是 "
+                    + format(order.getExpectedShipAt()) + "。发出后我就能继续查物流节点。";
+        }
+        return "当前还未发货，预计发货时间是 " + format(order.getExpectedShipAt())
+                + "。如果超过这个时间还没有物流更新，可以直接转人工帮您催一下仓库。";
     }
 
     private String answerForProduct(ProductCatalog product) {
