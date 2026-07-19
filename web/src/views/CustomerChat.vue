@@ -583,26 +583,23 @@ function formatDate(value?: string) {
 }
 
 .side-switch {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin: -18px -18px 14px;
-  padding: 12px;
-  background: rgba(255, 250, 245, 0.96);
-  border-bottom: 1px solid #f0e5dc;
-  backdrop-filter: blur(10px);
+  gap: 0;
+  margin-bottom: 14px;
+  padding: 3px;
+  background: #f7eee7;
+  border: 1px solid #eadbd0;
+  border-radius: 8px;
 }
 
 .switch-button {
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 9px 8px;
+  border-radius: 6px;
+  padding: 7px 8px;
   background: transparent;
   color: #75685f;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -624,10 +621,10 @@ function formatDate(value?: string) {
 }
 
 .switch-button.active {
-  border-color: #efcfc2;
-  background: #fff7f1;
+  border-color: #eadbd0;
+  background: #fffaf5;
   color: #5c463b;
-  box-shadow: inset 0 -2px 0 #d9825f;
+  box-shadow: none;
 }
 
 .switch-button.active span {
