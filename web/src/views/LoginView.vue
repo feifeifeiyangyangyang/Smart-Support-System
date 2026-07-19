@@ -20,7 +20,18 @@
       </el-form>
 
       <div class="demo-account">
-        本地演示账号由后端环境变量初始化，登录角色以后端返回为准。
+        <div class="demo-account-header">
+          <span>演示账号</span>
+          <el-button size="small" text type="primary" @click="fillDemoAccount">填入</el-button>
+        </div>
+        <div class="demo-account-row">
+          <span>账号</span>
+          <strong>{{ demoAccount.username }}</strong>
+        </div>
+        <div class="demo-account-row">
+          <span>密码</span>
+          <strong>{{ demoAccount.password }}</strong>
+        </div>
       </div>
       <router-link class="switch-link" :to="isAdmin ? '/user/login' : '/admin/login'">
         {{ isAdmin ? '去用户客服端登录' : '去管理后台登录' }}
@@ -45,6 +56,14 @@ const loading = ref(false)
 
 const role = computed(() => (route.meta.loginRole as UserRole) ?? 'customer')
 const isAdmin = computed(() => role.value === 'admin')
+const demoAccount = computed(() => isAdmin.value
+  ? { username: 'admin', password: 'admin123' }
+  : { username: 'user', password: '123456' })
+
+function fillDemoAccount() {
+  username.value = demoAccount.value.username
+  password.value = demoAccount.value.password
+}
 
 async function submit() {
   loading.value = true
