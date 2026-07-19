@@ -1,14 +1,41 @@
 <template>
   <el-container class="shell">
-    <el-aside v-if="user && !isLoginRoute" width="224px" class="aside">
-      <div class="brand">智服通</div>
-      <el-menu router :default-active="$route.path" class="menu">
-        <el-menu-item v-if="user.role === 'customer'" index="/chat">客服咨询</el-menu-item>
-        <el-menu-item v-if="user.role === 'admin'" index="/admin">管理后台</el-menu-item>
+    <el-aside
+      v-if="user && !isLoginRoute"
+      :width="effectiveAsideCollapsed ? '72px' : '224px'"
+      class="aside"
+      :class="{ collapsed: effectiveAsideCollapsed }"
+    >
+      <div class="brand">
+        <span class="brand-mark">智</span>
+        <span class="brand-text">智服通</span>
+      </div>
+      <el-button
+        class="aside-toggle"
+        text
+        :icon="effectiveAsideCollapsed ? Expand : Fold"
+        :aria-label="effectiveAsideCollapsed ? '展开侧边栏' : '收起侧边栏'"
+        @click="isAsideCollapsed = !isAsideCollapsed"
+      />
+      <el-menu
+        router
+        :default-active="$route.path"
+        class="menu"
+        :collapse="effectiveAsideCollapsed"
+        :collapse-transition="false"
+      >
+        <el-menu-item v-if="user.role === 'customer'" index="/chat">
+          <el-icon><ChatDotRound /></el-icon>
+          <template #title>客服咨询</template>
+        </el-menu-item>
+        <el-menu-item v-if="user.role === 'admin'" index="/admin">
+          <el-icon><DataBoard /></el-icon>
+          <template #title>管理后台</template>
+        </el-menu-item>
       </el-menu>
       <div class="health" :class="{ ok: healthOk }">
         <span class="health-dot" aria-hidden="true"></span>
-        后端：{{ healthText }}
+        <span class="health-label">后端：{{ healthText }}</span>
       </div>
     </el-aside>
     <el-main class="main" :class="{ centered: !user || isLoginRoute }">
@@ -27,9 +54,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { SwitchButton } from '@element-plus/icons-vue'
+import { ChatDotRound, DataBoard, Expand, Fold, SwitchButton } from '@element-plus/icons-vue'
 import { api, unwrap } from './api'
 import { currentUser, logout, type SessionUser } from './auth'
 
@@ -38,15 +65,28 @@ const router = useRouter()
 const user = ref<SessionUser | null>(currentUser())
 const healthText = ref('检查中')
 const healthOk = ref(false)
+const isAsideCollapsed = ref(false)
+const isCompactViewport = ref(false)
 const isLoginRoute = computed(() => route.path === '/user/login' || route.path === '/admin/login')
+const effectiveAsideCollapsed = computed(() => isAsideCollapsed.value && !isCompactViewport.value)
 
 watch(() => route.fullPath, () => {
   user.value = currentUser()
 })
 
 onMounted(async () => {
+  updateViewportMode()
+  window.addEventListener('resize', updateViewportMode)
   await checkHealth()
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateViewportMode)
+})
+
+function updateViewportMode() {
+  isCompactViewport.value = window.innerWidth <= 920
+}
 
 async function checkHealth() {
   try {

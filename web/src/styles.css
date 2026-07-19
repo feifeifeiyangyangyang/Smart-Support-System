@@ -48,17 +48,56 @@ textarea {
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(16px);
+  transition: width 180ms ease;
 }
 
 .brand {
   height: 68px;
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  gap: 10px;
+  padding: 0 18px;
   font-size: 23px;
   font-weight: 800;
   color: var(--brand);
   letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--brand-soft);
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-size: 18px;
+}
+
+.brand-text {
+  overflow: hidden;
+}
+
+.aside-toggle {
+  align-self: flex-end;
+  margin: -10px 12px 8px;
+  color: var(--muted);
+}
+
+.aside.collapsed .brand {
+  justify-content: center;
+  padding: 0 10px;
+}
+
+.aside.collapsed .brand-text,
+.aside.collapsed .health-label {
+  display: none;
+}
+
+.aside.collapsed .aside-toggle {
+  align-self: center;
+  margin: -10px 0 8px;
 }
 
 .menu {
@@ -67,9 +106,23 @@ textarea {
   margin-top: 6px;
 }
 
+.menu:not(.el-menu--collapse) {
+  width: 100%;
+}
+
+.menu.el-menu--collapse {
+  width: 100%;
+}
+
 .menu .el-menu-item {
   margin: 4px 10px;
   border-radius: 8px;
+}
+
+.aside.collapsed .menu .el-menu-item {
+  justify-content: center;
+  margin: 4px 9px;
+  padding: 0 !important;
 }
 
 .menu .el-menu-item.is-active {
@@ -80,6 +133,7 @@ textarea {
 
 .health {
   margin: auto 16px 16px;
+  min-height: 40px;
   padding: 10px 12px;
   border-radius: 8px;
   background: #fff5e9;
@@ -88,6 +142,12 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.aside.collapsed .health {
+  justify-content: center;
+  margin: auto 12px 16px;
+  padding: 10px;
 }
 
 .health-dot {
@@ -297,6 +357,10 @@ textarea {
 
   .brand {
     height: 56px;
+  }
+
+  .aside-toggle {
+    display: none;
   }
 
   .health {
