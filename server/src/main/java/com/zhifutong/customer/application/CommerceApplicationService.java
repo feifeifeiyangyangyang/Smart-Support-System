@@ -198,6 +198,9 @@ public class CommerceApplicationService {
             return Optional.empty();
         }
         String clean = question.trim();
+        if (looksLikeOrderListQuestion(clean)) {
+            return Optional.of(answerForOrderList(user, clean));
+        }
         Optional<CustomerOrder> matchedOrder = findOrderByNo(user, clean);
         if (matchedOrder.isEmpty()) {
             matchedOrder = findOrderByIndex(user, clean);
@@ -235,10 +238,7 @@ public class CommerceApplicationService {
     }
 
     private Optional<CustomerOrder> latestOrder(AuthenticatedUser user) {
-        CustomerOrder order = orderMapper.selectOne(new LambdaQueryWrapper<CustomerOrder>()
-                .eq(CustomerOrder::getUserId, user.userId())
-                .orderByDesc(CustomerOrder::getCreatedAt)
-                .last("LIMIT 1"));
+        CustomerOrder order = userOrders(user).stream().findFirst().orElse(null);
         return Optional.ofNullable(order);
     }
 
@@ -247,9 +247,7 @@ public class CommerceApplicationService {
         if (index < 0) {
             return Optional.empty();
         }
-        List<CustomerOrder> orders = orderMapper.selectList(new LambdaQueryWrapper<CustomerOrder>()
-                .eq(CustomerOrder::getUserId, user.userId())
-                .orderByDesc(CustomerOrder::getCreatedAt));
+        List<CustomerOrder> orders = userOrders(user);
         return index < orders.size() ? Optional.of(orders.get(index)) : Optional.empty();
     }
 
@@ -268,28 +266,59 @@ public class CommerceApplicationService {
 
     private boolean looksLikeOrderQuestion(String question) {
         return containsAny(question, "订单", "发货", "物流", "快递", "到哪", "签收", "配送", "什么时候到", "什么时候发",
-                "第一个", "第二个", "第三个", "最近", "刚买", "我买的", "那个");
+                "第一个", "第二个", "第三个", "第四个", "最近", "刚买", "我买的", "那个");
     }
 
     private boolean looksLikeProductQuestion(String question) {
-        return containsAny(question, "商品", "库存", "价格", "发货", "售后", "退货", "拆封", "质量");
+        return containsAny(question, "商品", "库存", "价格", "发货", "售后", "退货", "拆封", "质量", "买过", "买了");
     }
 
     private boolean looksLikeAfterSaleQuestion(String question) {
         return containsAny(question, "能退", "退货", "退款", "换货", "售后", "拆封", "破损", "质量", "坏了");
     }
 
+    private boolean looksLikeOrderListQuestion(String question) {
+        if (containsAny(question, "所有商品", "全部商品", "所有订单", "全部订单", "订单列表", "买的所有商品",
+                "买过哪些", "买了哪些", "我买了什么", "我买过什么", "哪些商品", "分别是哪个", "分别是什么")) {
+            return true;
+        }
+        return requestedOrderIndex(question) >= 0 && containsAny(question, "分别", "哪些", "是什么", "是哪个");
+    }
+
     private int requestedOrderIndex(String question) {
-        if (containsAny(question, "第一个", "第一单", "1号订单")) {
-            return 0;
+        List<Integer> indexes = requestedOrderIndexes(question);
+        return indexes.isEmpty() ? -1 : indexes.get(0);
+    }
+
+    private List<Integer> requestedOrderIndexes(String question) {
+        List<Integer> indexes = new java.util.ArrayList<>();
+        if (containsAny(question, "第一个", "第一单", "1号订单", "第1个", "第1单")) {
+            indexes.add(0);
         }
-        if (containsAny(question, "第二个", "第二单", "2号订单")) {
-            return 1;
+        if (containsAny(question, "第二个", "第二单", "2号订单", "第2个", "第2单")) {
+            indexes.add(1);
         }
-        if (containsAny(question, "第三个", "第三单", "3号订单")) {
-            return 2;
+        if (containsAny(question, "第三个", "第三单", "3号订单", "第3个", "第3单")) {
+            indexes.add(2);
         }
-        return -1;
+        if (containsAny(question, "第四个", "第四单", "4号订单", "第4个", "第4单")) {
+            indexes.add(3);
+        }
+        if (containsAny(question, "第五个", "第五单", "5号订单", "第5个", "第5单")) {
+            indexes.add(4);
+        }
+        return indexes;
+    }
+
+    private String orderPositionLabel(int index) {
+        return switch (index) {
+            case 0 -> "第一个";
+            case 1 -> "第二个";
+            case 2 -> "第三个";
+            case 3 -> "第四个";
+            case 4 -> "第五个";
+            default -> "第" + (index + 1) + "个";
+        };
     }
 
     private boolean containsAny(String text, String... words) {
@@ -311,14 +340,68 @@ public class CommerceApplicationService {
             if (product.getProductName().contains("杯") && question.contains("杯")) {
                 return product;
             }
-            if (product.getProductName().contains("洗面巾") && question.contains("洗面巾")) {
+            if (product.getProductName().contains("洗面巾") && containsAny(question, "洗面巾", "洗脸巾", "洁面巾")) {
                 return product;
             }
-            if (product.getProductName().contains("靠枕") && question.contains("靠枕")) {
+            if (product.getProductName().contains("靠枕") && containsAny(question, "靠枕", "枕头")) {
                 return product;
             }
         }
         return null;
+    }
+
+    private List<CustomerOrder> userOrders(AuthenticatedUser user) {
+        return orderMapper.selectList(new LambdaQueryWrapper<CustomerOrder>()
+                .eq(CustomerOrder::getUserId, user.userId())
+                .orderByDesc(CustomerOrder::getCreatedAt));
+    }
+
+    private String answerForOrderList(AuthenticatedUser user, String question) {
+        List<CustomerOrder> orders = userOrders(user);
+        if (orders.isEmpty()) {
+            return "我这边暂时没有查到您的订单。如果您刚下单，可以稍后刷新订单列表，或者提供订单号让我再查一次。";
+        }
+        List<Integer> indexes = requestedOrderIndexes(question);
+        boolean askAll = containsAny(question, "所有商品", "全部商品", "所有订单", "全部订单", "订单列表", "买的所有商品",
+                "买过哪些", "买了哪些", "我买了什么", "我买过什么", "哪些商品");
+        StringBuilder builder;
+        if (!askAll && !indexes.isEmpty()) {
+            builder = new StringBuilder("按页面“我的订单”从上到下看，您问的这几个位置对应：");
+            for (Integer index : indexes) {
+                if (index < orders.size()) {
+                    appendOrderLine(builder, orderPositionLabel(index), orders.get(index));
+                } else {
+                    builder.append("\n").append(orderPositionLabel(index)).append("：目前没有对应订单。");
+                }
+            }
+        } else {
+            builder = new StringBuilder("我查到您当前有 ")
+                    .append(orders.size())
+                    .append(" 个订单，按页面“我的订单”从上到下分别是：");
+            for (int i = 0; i < orders.size(); i++) {
+                appendOrderLine(builder, String.valueOf(i + 1), orders.get(i));
+            }
+        }
+        builder.append("\n您可以继续问“第几个订单物流到哪里了”，也可以直接报商品名或订单号。");
+        return builder.toString();
+    }
+
+    private void appendOrderLine(StringBuilder builder, String label, CustomerOrder order) {
+        ProductCatalog product = productMapper.selectById(order.getProductId());
+        ShipmentEvent latest = latestShipmentEvent(order.getId());
+        String productName = product == null ? "商品" : product.getProductName();
+        String delimiter = label.matches("\\d+") ? ". " : "：";
+        builder.append("\n").append(label).append(delimiter).append("「").append(productName).append("」")
+                .append(" × ").append(order.getQuantity())
+                .append("，订单号 ").append(order.getOrderNo())
+                .append("，状态：").append(orderStatusLabel(order.getStatus()));
+        if (order.getStatus() == OrderStatus.WAITING_SHIPMENT || order.getStatus() == OrderStatus.PAID) {
+            builder.append("，预计发货：").append(format(order.getExpectedShipAt()));
+        } else if (latest != null) {
+            builder.append("，最新物流：").append(latest.getEventNote())
+                    .append("（").append(format(latest.getEventTime())).append("）");
+        }
+        builder.append("。");
     }
 
     private String answerForOrder(CustomerOrder order, String question) {
@@ -328,7 +411,7 @@ public class CommerceApplicationService {
         if (looksLikeAfterSaleQuestion(question)) {
             String rule = product == null ? "具体规则需要人工客服结合商品情况核实。" : product.getAfterSaleRule();
             return "我查到您这单是 " + order.getOrderNo() + "，商品为「" + productName + "」，当前订单状态是"
-                    + order.getStatus() + "。售后规则：" + rule
+                    + orderStatusLabel(order.getStatus()) + "。售后规则：" + rule
                     + " 如果已经拆封、使用、配件缺失或商品破损，建议直接转人工并补充照片/视频凭证。";
         }
         if (order.getStatus() == OrderStatus.WAITING_SHIPMENT || order.getStatus() == OrderStatus.PAID) {
@@ -345,10 +428,10 @@ public class CommerceApplicationService {
                     + " 签收。如果商品有破损、缺件或质量问题，可以继续描述情况，我帮您转到售后工单。";
         }
         if (order.getStatus() == OrderStatus.REFUNDING || order.getStatus() == OrderStatus.REFUNDED) {
-            return "我查到您的订单 " + order.getOrderNo() + " 当前处于" + order.getStatus()
+            return "我查到您的订单 " + order.getOrderNo() + " 当前处于" + orderStatusLabel(order.getStatus())
                     + "状态，退款/售后进度建议在工单里继续跟进，避免遗漏凭证。";
         }
-        return "我查到您的订单 " + order.getOrderNo() + " 当前状态是 " + order.getStatus()
+        return "我查到您的订单 " + order.getOrderNo() + " 当前状态是 " + orderStatusLabel(order.getStatus())
                 + "，商品是「" + productName + "」。如果需要更具体处理，可以转人工继续核实。";
     }
 
@@ -437,5 +520,21 @@ public class CommerceApplicationService {
 
     private String valueOrDefault(String value, String defaultValue) {
         return value == null || value.isBlank() ? defaultValue : value;
+    }
+
+    private String orderStatusLabel(OrderStatus status) {
+        if (status == null) {
+            return "未知";
+        }
+        return switch (status) {
+            case PENDING_PAYMENT -> "待支付";
+            case PAID, WAITING_SHIPMENT -> "待发货";
+            case SHIPPED -> "已发货";
+            case IN_TRANSIT -> "运输中";
+            case SIGNED -> "已签收";
+            case REFUNDING -> "退款中";
+            case REFUNDED -> "已退款";
+            case CANCELLED -> "已取消";
+        };
     }
 }
